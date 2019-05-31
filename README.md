@@ -1,5 +1,5 @@
 # Automated Transition State Theory Calculator | AutoTST
-
+[![Build Status](https://travis-ci.com/ReactionMechanismGenerator/AutoTST.svg?branch=master)](https://travis-ci.com/ReactionMechanismGenerator/AutoTST)
 
 ## Descritpion
 
