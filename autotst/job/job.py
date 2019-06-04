@@ -229,8 +229,8 @@ class Job():
         if (complete and converged):
             logging.info(
                 "{} was successful and was validated!".format(calc.label))
-                atoms = self.read_log(
-                os.path.join(scratch_dir, f)
+            atoms = self.read_log(
+            os.path.join(scratch_dir, f)
             )
             return check_isomorphic(conformer)
 
