@@ -1,5 +1,8 @@
 # Automated Transition State Theory Calculator | AutoTST
 [![Build Status](https://travis-ci.com/ReactionMechanismGenerator/AutoTST.svg?branch=master)](https://travis-ci.com/ReactionMechanismGenerator/AutoTST)
+[![codecov](https://codecov.io/gh/reactionmechanismgenerator/autotst/branch/master/graph/badge.svg)](https://codecov.io/gh/reactionmechanismgenerator/autotst)
+[![MIT license](http://img.shields.io/badge/license-MIT-brightgreen.svg)](http://opensource.org/licenses/MIT)
+![Release](https://img.shields.io/badge/version-0.1.0-brightgreen.svg)
 
 ## Descritpion
 
@@ -38,7 +41,9 @@ Finally, RMG has a dependency on `openbabel` but this dependency causes AutoTST 
 
 Modify environment variables. Add AutoTST to the `PYTHONPATH` to ensure that you can access modules from any folder. Modify your ~/.bashrc file by adding the following line:
 
-- `export PYTHONPATH=$PYTHONPATH:your_folder/AutoTST`
+- `export AUTOTST="your_folder/AutoTST`
+
+- `export PYTHONPATH=$AUTOTST:$PYTHONPATH`
 
 To be able to run AutoTST in any conda environment, you can set your path to the following by modifing your ~/.bashrc: 
 
