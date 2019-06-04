@@ -57,12 +57,7 @@ class Gaussian():
                      "mem": "5GB",
                      "nprocshared": 20,
                  },
-<<<<<<< HEAD
-                 scratch=".",
-                 convergence=""
-=======
                  directory=".",
->>>>>>> 6f9cbd939a4ad6588d4b91e8168ab1b388308d38
                  ):
 
         default_settings = {
@@ -74,7 +69,7 @@ class Gaussian():
 
         self.conformer = conformer
 
-        # setting the settings accordingly 
+        # setting the settings accordingly
         for setting, value in list(default_settings.items()):
             if setting in list(settings.keys()):
                 assert isinstance(settings[setting], type(
@@ -86,12 +81,7 @@ class Gaussian():
 
         self.command = "g16"
         self.settings = settings
-<<<<<<< HEAD
-        self.scratch = scratch
-        self.convergence = convergence
-=======
         self.directory = directory
->>>>>>> 6f9cbd939a4ad6588d4b91e8168ab1b388308d38
 
     def __repr__(self):
         if isinstance(self.conformer, TS):
@@ -162,29 +152,6 @@ class Gaussian():
             "rotors"
         )
 
-<<<<<<< HEAD
-        calc = ASEGaussian(mem=mem,
-                           nprocshared=nprocshared,
-                           label=label,
-                           scratch=new_scratch,
-                           method=method,
-                           basis=basis,
-                           extra=extra,
-                           multiplicity=mult,
-                           addsec=[string[:-1]])
-
-        calc.atoms = conformer.ase_molecule
-        del calc.parameters['force']
-
-        return calc
-
-    def get_conformer_calc(self,
-                           conformer=None,
-                           settings=None,
-                           scratch=None,
-                           convergence=None
-                           ):
-=======
         ase_gaussian = ASEGaussian(
             mem=self.settings["mem"],
             nprocshared=self.settings["nprocshared"],
@@ -200,8 +167,7 @@ class Gaussian():
         del ase_gaussian.parameters['force']
         return ase_gaussian
 
-    def get_conformer_calc(self):
->>>>>>> 6f9cbd939a4ad6588d4b91e8168ab1b388308d38
+    def get_conformer_calc(self,convergence=''):
         """
         A method that creates a calculator for a `Conformer` that will perform a geometry optimization
 
@@ -210,32 +176,16 @@ class Gaussian():
         - torsion (Torsion): A `Torsion` object that you want to perform hindered rotor calculations about
         - settings (dict): a dictionary of settings containing method, basis, mem, nprocshared
         - scratch (str): a directory where you want log files to be written to
-<<<<<<< HEAD
-        - steps (int): the number of steps you want performed in this scan
-        - step_size (float): the size, in degrees, of the step you to scan along
         - convergence (str): ['verytight','tight','' (default)], specifies the convergence criteria of the geometry optimization
-=======
->>>>>>> 6f9cbd939a4ad6588d4b91e8168ab1b388308d38
 
         Returns:
         - calc (ASEGaussian): an ASEGaussian calculator with all of the proper setting specified
         """
-<<<<<<< HEAD
-        if settings is None:
-            settings = self.settings
-        if scratch is None:
-            scratch = self.scratch
-        if convergence is None:
-            convergence = self.convergence
+
 
         assert convergence.lower() in ["", "verytight", "tight", "loose"]
 
-        method = settings["method"]
-        basis = settings["basis"]
-        mem = settings["mem"]
-        nprocshared = settings["nprocshared"]
-=======
->>>>>>> 6f9cbd939a4ad6588d4b91e8168ab1b388308d38
+
 
         if isinstance(self.conformer, TS):
             logging.info(
@@ -266,33 +216,15 @@ class Gaussian():
             nprocshared=self.settings["nprocshared"],
             label=label,
             scratch=new_scratch,
-<<<<<<< HEAD
-            method=method,
-            basis=basis,
-            extra="opt=(CalcFC,MaxCycles=900,{}) freq IOp(7/33=1,2/16=3) scf=(MaxCycle=900)".format(convergence),
-            multiplicity=conformer.rmg_molecule.multiplicity)
-        calc.atoms = conformer.ase_molecule
-        calc.convergence = convergence
-        del calc.parameters['force']
-
-        return calc
-
-    def get_shell_calc(self,
-                       ts=None,
-                       direction="forward",
-                       settings=None,
-                       scratch=None):
-=======
             method=self.settings["method"],
             basis=self.settings["basis"],
-            extra="opt=(calcfc,maxcycles=900) freq IOP(7/33=1,2/16=3) scf=(maxcycle=900)",
+            extra="opt=(calcfc,maxcycles=900,{}) freq IOP(7/33=1,2/16=3) scf=(maxcycle=900)".format(convergence),
             multiplicity=self.conformer.rmg_molecule.multiplicity)
         ase_gaussian.atoms = self.conformer.ase_molecule
         del ase_gaussian.parameters['force']
         return ase_gaussian
 
     def get_shell_calc(self):
->>>>>>> 6f9cbd939a4ad6588d4b91e8168ab1b388308d38
         """
         A method to create a calculator that optimizes the reaction shell of a `TS` object
 
