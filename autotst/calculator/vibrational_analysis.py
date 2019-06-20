@@ -114,7 +114,7 @@ class VibrationalAnalysis():
 
         assert os.path.exists(self.log_file), "Log file provided does not exist"
 
-        log_file_info = ccread(self.log_file)
+        log_file_info = ccread(self.log_file, loglevel=logging.ERROR)
 
         try:
             self.vibrations = list(zip(log_file_info.vibfreqs, log_file_info.vibdisps))

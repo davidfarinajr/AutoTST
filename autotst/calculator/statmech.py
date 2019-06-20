@@ -355,7 +355,8 @@ class StatMech():
             logging.info("There is no lowest energy conformer file...")
             return False
 
-        parser = ccread(os.path.join(self.directory, "ts", label, label + ".log"), loglevel=logging.ERROR)
+        parser = ccread(os.path.join(self.directory, "ts", label,
+                                     label + ".log"), loglevel=logging.ERROR)
         symbol_dict = {
             17: "Cl",
             9:  "F",
@@ -479,7 +480,7 @@ class StatMech():
                         "It looks like {} doesn't have any optimized geometries".format(smiles))
                     continue
 
-                parser = ccread(path, loglevel=logging.ERROR)
+                parser = ccread(path, loglevel = logging.ERROR)
                 lowest_energy = parser.scfenergies[-1]
                 lowest_energy_conf = list(react.conformers.values())[0][0]
 
