@@ -548,7 +548,7 @@ class Job():
                             "It seems that {} was never run...".format(f))
                         continue
                     try:
-                        parser = ccread(path)
+                        parser = ccread(path, loglevel=logging.ERROR)
                         if parser is None:
                             logging.info(
                                 "Something went wrong when reading in results for {} using cclib...".format(f))
@@ -591,7 +591,7 @@ class Job():
                 lowest_energy_file))
             calculation_status[species] = True
 
-            parser = ccread(dest)
+            parser = ccread(dest, loglevel=logging.ERROR)
             xyzpath = os.path.join(self.calculator.directory,"species",conformer.smiles,conformer.smiles+".xyz")
             parser.writexyz(xyzpath)
 
@@ -805,7 +805,7 @@ class Job():
                     logging.info("It appears that {} failed...".format(f))
                     continue
                 try:
-                    parser = ccread(path)
+                    parser = ccread(path, loglevel=logging.ERROR)
                     if parser is None:
                         logging.info(
                             "Something went wrong when reading in results for {}...".format(f))
@@ -993,14 +993,23 @@ class Job():
                 t = "species"
                 label = conformer.smiles
                 file_name = os.path.join(
-                    self.directory, t , label, "rotors", lowest_energy_label + ".log")
-
-                direction = None
-      
-
-
-            atoms = self.read_log(file_name)
-            conformer.ase_molecule = atoms
+                    self.directory, "species",conformer.smiles , "rotors", lowest_energy_label + ".log")
+            parser = ccread(file_name, loglevel=logging.ERROR)
+            first_is_lowest, min_energy, atomnos, atomcoords = self.check_rotor_lowest_conf(
+                parser=parser)
+            symbol_dict = {
+                17: "Cl",
+                9:  "F",
+                8:  "O",
+                7:  "N",
+                6:  "C",
+                1:  "H",
+            }
+            atoms = []
+            for atom_num, coords in zip(parser.atomnos, parser.atomcoords[-1]):
+                atoms.append(
+                    Atom(symbol=symbol_dict[atom_num], position=coords))
+            conformer.ase_molecule = Atoms(atoms)
             conformer.update_coords_from("ase")
             for index in ["X", "Y", "Z"]: 
                 # we do this because we now have a new conformer
