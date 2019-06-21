@@ -605,7 +605,7 @@ class Job():
             xyzpath = os.path.join(self.calculator.directory,"species",conformer.smiles,conformer.smiles+".xyz")
             parser.writexyz(xyzpath)
 
-            logging.info("The lowest energy xyz file is {}! :)".format(
+            logging.info("The lowest energy xyz file is {}!".format(
                 xyzpath))
 
             if calculate_fod:  # We will run an orca FOD job
@@ -811,7 +811,6 @@ class Job():
                 logging.info(
                     "All of the ircs failed for {}".format(reaction.label))
                 return False
-                
 
     def calculate_reaction(self, recalculate=False, vibrational_analysis=True, calculate_fod=False):
         """
@@ -833,7 +832,7 @@ class Job():
             irc_folder = os.path.join(self.directory, "ts", reaction.label, 'irc')
             if os.path.exists(log_path) and recalculate is False:
                 logging.info("A log file already exists for reaction {}".format(reaction.label))
-                logging.info("Trying to validate TS with existing log file through Vibrational Analysis...")
+                logging.info("Trying to validate TS with existing log file through vibrational analysis...")
                 lines = open(log_path).readlines()[0:10]
                 direction = None
                 for line in lines:
@@ -847,22 +846,26 @@ class Job():
                 
                 validated = False
                 if direction:
+                    logging.info(
+                        "The direction of the ts is {}".format(direction))
                     ts = reaction.ts[direction][0]
                     vib = VibrationalAnalysis(
-                        transitionstate=ts, directory=self.directory)
+                        transitionstate=ts, log_file=log_path, directory=self.directory)
                     validated = vib.validate_ts()
                 else:
+                    logging.info("Could not determine direction of ts from log file, trying both directions...")
                     directions = ['forward','reverse']
                     for direction in directions:
                         ts = reaction.ts[direction][0]
                         vib = VibrationalAnalysis(
-                        transitionstate=ts, directory=self.directory)
+                        transitionstate=ts, log_file=log_path, directory=self.directory)
                         validated = vib.validate_ts()
                         if validated:
+                            logging.info('{} TS validated from vibrational analysis'.format(direction))
                             break
                 
                 if validated:
-                    logging.info("Existing TS has been validated from vibrational analysis from reaction {}".format(reaction.label))
+                    logging.info("Existing TS has been validated from vibrational analysis for reaction {}".format(reaction.label))
                     logging.info("The TS log file is {} :)".format(log_path))
                     calculation_status[reaction] = True
                     if calculate_fod:  # We will run an orca FOD job
@@ -874,7 +877,7 @@ class Job():
                         self.calculate_fod(conformer=ts)
                     continue
                 else:
-                    logging.info("Could not validate existing TS for {} through Vibrational Analysis...checking for irc jobs".format(
+                    logging.info("Could not validate existing TS for {} through vibrational analysis...checking for irc jobs".format(
                         reaction.label))
 
                     got_one = self.check_irc_folder(reaction)
@@ -913,7 +916,7 @@ class Job():
                     logging.info(
                         "We could not find an irc validated transition state :(")
                     continue
-        
+
         #####################################
 
             logging.info("Calculating geometries for {}".format(self.reaction))
