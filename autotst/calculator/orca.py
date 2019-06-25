@@ -44,11 +44,33 @@ class Orca():
                 self.label = self.conformer.reaction_label
             else:
                 self.label = self.conformer.smiles
+
+        if '(' in self.label or '#' in self.label:
+            self.base = label.replace('(', '{').replace(')', '}').replace('#', '=-')
+        else:
+            self.base = self.label
+
+        try:
+            self.charge = self.conformer.rmg_molecule.getNetCharge()
+        except:
+            logging.warning('could not get charge for conformer...setting charge to None')
+            self.charge = None
+        try:
+            self.mult = self.conformer.rmg_molecule.multiplicity
+        except:
+            logging.warning('could not get mulitpicity of conformer...setting multiplicty to None')
+            self.mult = None
+        try:
+            self.coords = self.conformer.get_xyz_block()
+        except:
+            logging.warning('could not get coordinates of conformer...setting coords to None')
+            self.coords = None
+
         
     def __repr__(self):
         return '<Orca Calculator>'
 
-    def write_fod_input(self,path):
+    def write_fod_input(self,path='.'):
         """
         Generates input files to run finite temperaure DFT to determine the Fractional Occupation number weighted Density (FOD number).
         Uses the default functional, basis set, and SmearTemp (TPSS, def2-TZVP, 5000 K) in Orca.
@@ -56,31 +78,142 @@ class Orca():
         Bauer, C. A., Hansen, A., & Grimme, S. (2017). The Fractional Occupation Number Weighted Density as a Versatile Analysis Tool for Molecules with a Complicated Electronic Structure. 
         Chemistry - A European Journal, 23(25), 6150–6164. https://doi.org/10.1002/chem.201604682
         """
-        label = self.label
-        charge = self.conformer.rmg_molecule.getNetCharge()
-        mult = self.conformer.rmg_molecule.multiplicity
-        coords = self.conformer.get_xyz_block()
+
+        assert None not in [self.mult,self.charge,self.coords]
 
         if not os.path.exists(path):
             os.makedirs(path)
-        outfile = os.path.join(path,label+'_fod.inp')
-
-        if '(' in label or '#' in label:
-            base = label.replace('(', '{').replace(')', '}').replace('#','=-')
-        else:
-            base = label
+        outfile = os.path.join(path,self.label+'_fod.inp')
 
         with open(outfile, 'w') as f:
-            f.write('# FOD anaylsis for {} \n'.format(label))
+            f.write('# FOD anaylsis for {} \n'.format(self.label))
             f.write('! FOD \n')
             f.write('\n')
             f.write('%pal nprocs 4 end \n')
             f.write('%scf\n  MaxIter  600\nend\n')
-            f.write('%base "{}_fod" \n'.format(base))
-            f.write('*xyz {} {}\n'.format(charge, mult))
-            f.write(coords)
+            f.write('%base "{}_fod" \n'.format(self.base))
+            f.write('*xyz {} {}\n'.format(self.charge, self.mult))
+            f.write(self.coords)
             f.write('*\n')
-    
+
+    def write_sp_input(self, path='.', nprocs=20, mem='110gb', method = 'ccsd(t)-f12', basis= 'cc-pvdz-f12',
+                        scf_convergence = 'verytightscf',max_iter =  '600'
+                        ):
+        """
+        A method to write single point energy calculation input files for ORCA.
+        
+        :param path: path for input file
+        :param settings:
+            :param nprocs: number of processors to run the calculation on (default is 20)
+            :param mem: amount of memory requested (in gb or mb) to run the job (default is 110gb)
+            :param method: calculation method to run.  Supported methods are (hf,ccsd(t),ccsd(t)-f12). Default is ccsd(t)-f12
+            :param basis: basis set for calculation. Default is cc-pvdz-f12
+            :param scf_convergence : convergence option for scf. supported options are (normalscf,loosescf,sloppyscf,strongscf,tightscf,verytightscf,extremescf). Default is 'verytightscf'
+            :param max_iter : maximum number of scf iterations to reach convergence criteria. (default is 600)
+        """
+
+        assert None not in [self.mult, self.charge, self.coords]
+
+        nprocs = int(nprocs)
+        mem = mem.lower()
+        method = method.lower()
+        basis = basis.lower()
+        scf_convergence = scf_convergence.lower()
+        max_iter = max_iter.lower()
+
+        suppported_methods = ['hf','ccsd(t)','ccsd(t)-f12']
+
+        assert method in suppported_methods,'is appears {0} is not a supported method. Please select a method from {1}'.format(method,suppported_methods)
+        
+        scf_convergence_options = 'normalscf loosescf sloppyscf strongscf tightscf verytightscf extremescf'
+        assert scf_convergence in scf_convergence_options
+
+
+        if 'gb' in mem:
+            mem_mb = float(mem.strip('gb')) * 1000
+        elif 'mb' in mem:
+            mem_mb = float(mem.strip('mb'))
+        else: #assume GB
+            mem_mb = float(mem) * 1000
+        mem_proc = int(mem_mb/nprocs)
+
+        if 'dz' in basis:
+            basis_label = 'dz'
+        elif 'tz' in basis:
+            basis_label = 'tz'
+        elif 'qz' in basis:
+            basis_label = 'qz'
+        elif '5z' in basis:
+            basis_label = '5z'
+        elif '6z' in basis:
+            basis_label = '6z'
+        else:
+            basis_label = basis
+        if 'aug' in basis:
+            basis_label = 'a' + basis_label
+
+        if 'f12' in method and 'f12' not in basis:
+            logging.warning('An F12 method was called, but an f12 basis set was not chosen')
+            logging.info('trying to find an f12 basis...')
+            if 'cc' in basis:
+                basis = 'cc-pv{}-f12'.format(basis_label.strip('a'))
+                logging.info('{} will be used for the f12 calculation'.format(basis))
+            else:
+                logging.info(
+                    'Could not find f12 basis set. {} will be used for the f12 calculation'.format(basis))
+
+        if 'hf' not in method:
+            if int(self.mult) == 1:
+                hf = 'rhf'
+            else:
+                hf = 'uhf'
+        else:
+            if int(self.mult) == 1:
+                method = 'rhf'
+            else:
+                method = 'uhf'
+
+        auxiliary_basis_sets_dict = {
+            'cc-pvdz-f12': 'CC-PVDZ-F12-CABS CC-PVTZ/C',
+            'cc-pvtz-f12': 'CC-PVTZ-F12-CABS CC-PVQZ/C',
+            'cc-pvqz-f12': 'CC-PVQZ-F12-CABS CC-PVQZ/C'}
+
+        if basis in auxiliary_basis_sets_dict.keys():
+            aux_basis = auxiliary_basis_sets_dict.get(basis)
+            if int(self.mult) == 1:
+                aux_basis = aux_basis.split(' ')[0]
+        else:
+            aux_basis = None
+
+        if method == 'ccsd(t)-f12' and int(self.mult) != 1:
+            method = 'ccsd(t)-f12/ri'
+
+        file_name = self.label + '_' + method + '{' + str(basis_label) + '}' + '.inp'
+        if '/' in file_name:
+            file_name = file_name.replace('/','-')
+
+        if not os.path.exists(path):
+            os.makedirs(path)
+        file_path = os.path.join(path,file_name)
+
+        base = self.base + '_' + method + '_' + basis_label
+        if '(' in base or '#' in base or '/' in base:
+            base = base.replace('(', '{').replace(')', '}').replace('#', '=-').replace('/','-')
+
+        with open(file_path, 'w') as f:
+            f.write('# {0}/{1} calculation for {2} \n'.format(method,basis,self.label))
+            if aux_basis is not None:
+                f.write('! {0} {1} {2} {3}\n'.format(method.upper(),basis.upper(),aux_basis,scf_convergence.upper()))
+            else:
+                f.write('! {0} {1} {2}\n'.format(method.upper(),basis.upper(),scf_convergence.upper()))
+            f.write('\n')
+            f.write('%pal nprocs {0} end \n'.format(nprocs))
+            f.write('%maxcore {0}\n'.format(mem_proc))
+            f.write('%scf\n  MaxIter  {0}\nend\n'.format(max_iter))
+            f.write('%base "{0}" \n'.format(base))
+            f.write('*xyz {0} {1}\n'.format(self.charge, self.mult))
+            f.write(self.coords)
+            f.write('*\n')
     
     def check_NormalTermination(self,path):
         """
