@@ -97,8 +97,7 @@ class Orca():
             f.write('*\n')
 
     def write_sp_input(self, path='.', nprocs=20, mem='110gb', method = 'ccsd(t)-f12', basis= 'cc-pvdz-f12',
-                        scf_convergence = 'verytightscf',max_iter =  '600'
-                        ):
+                        scf_convergence = 'verytightscf', max_iter = '600'):
         """
         A method to write single point energy calculation input files for ORCA.
         
@@ -111,7 +110,7 @@ class Orca():
             :param scf_convergence : convergence option for scf. supported options are (normalscf,loosescf,sloppyscf,strongscf,tightscf,verytightscf,extremescf). Default is 'verytightscf'
             :param max_iter : maximum number of scf iterations to reach convergence criteria. (default is 600)
         """
-
+        
         assert None not in [self.mult, self.charge, self.coords]
 
         nprocs = int(nprocs)
@@ -170,8 +169,10 @@ class Orca():
         else:
             if int(self.mult) == 1:
                 method = 'rhf'
+                hf = ''
             else:
                 method = 'uhf'
+                hf = ''
 
         auxiliary_basis_sets_dict = {
             'cc-pvdz-f12': 'CC-PVDZ-F12-CABS CC-PVTZ/C',
@@ -180,15 +181,15 @@ class Orca():
 
         if basis in auxiliary_basis_sets_dict.keys():
             aux_basis = auxiliary_basis_sets_dict.get(basis)
-            if int(self.mult) == 1:
+            if int(self.mult) == 1 or 'hf' in method:
                 aux_basis = aux_basis.split(' ')[0]
         else:
-            aux_basis = None
+            aux_basis = ''
 
         if method == 'ccsd(t)-f12' and int(self.mult) != 1:
             method = 'ccsd(t)-f12/ri'
 
-        file_name = self.label + '_' + method + '{' + str(basis_label) + '}' + '.inp'
+        file_name = self.label + '_' + method + '{' + str(basis) + '}' + '.inp'
         if '/' in file_name:
             file_name = file_name.replace('/','-')
 
@@ -196,16 +197,13 @@ class Orca():
             os.makedirs(path)
         file_path = os.path.join(path,file_name)
 
-        base = self.base + '_' + method + '_' + basis_label
+        base = self.base + '_' + method + '_' + basis
         if '(' in base or '#' in base or '/' in base:
             base = base.replace('(', '{').replace(')', '}').replace('#', '=-').replace('/','-')
 
         with open(file_path, 'w') as f:
             f.write('# {0}/{1} calculation for {2} \n'.format(method,basis,self.label))
-            if aux_basis is not None:
-                f.write('! {0} {1} {2} {3}\n'.format(method.upper(),basis.upper(),aux_basis,scf_convergence.upper()))
-            else:
-                f.write('! {0} {1} {2}\n'.format(method.upper(),basis.upper(),scf_convergence.upper()))
+            f.write('! {0} {1} {2} {3} {4}\n'.format(hf.upper(),method.upper(),basis.upper(),aux_basis.upper(),scf_convergence.upper()))
             f.write('\n')
             f.write('%pal nprocs {0} end \n'.format(nprocs))
             f.write('%maxcore {0}\n'.format(mem_proc))
@@ -215,6 +213,93 @@ class Orca():
             f.write(self.coords)
             f.write('*\n')
     
+    def write_extrapolation_input(self, path='.', nprocs=20, mem='110gb', option='EP3', basis_family='aug-cc', 
+                                scf_convergence='Tightscf', method='DLPNO-CCSD(T)', method_details='tightpno', 
+                                n=3, m=4):
+
+        option = str(option).lower()
+        basis_family = basis_family.lower()
+        method = method.lower()
+        scf_convergence= scf_convergence.lower()
+        mem = mem.lower()
+
+        if 'gb' in mem:
+            mem_mb = float(mem.strip('gb')) * 1000
+        elif 'mb' in mem:
+            mem_mb = float(mem.strip('mb'))
+        else:  # assume GB
+            mem_mb = float(mem) * 1000
+        mem_proc = int(mem_mb/nprocs)
+        
+        scf_convergence_options = 'normalscf loosescf sloppyscf strongscf tightscf verytightscf extremescf'
+        assert scf_convergence in scf_convergence_options
+
+        assert option in ['2','3','ep2','ep3']
+        if option in ['2', 'ep2']:
+            if m is None:
+                m = 4
+        if option in ['ep2','ep3']:
+            assert method in ['dlpno-ccsd(t)','mp2']        
+
+        if n is None:
+            n = 3
+        else:
+            n = int(n)
+
+        if m is not None:
+            m = int(m)
+            assert m == n+1
+        
+        assert basis_family in ['cc','aug-cc', 'cc-core', 'ano', 'saug-ano', 'aug-ano', 'def2']
+        
+        if int(self.mult) == 1:
+            hf = 'rhf'
+        else:
+            hf = 'uhf'
+
+        if option in ['2','ep2']:
+            file_name = self.label + '_' + method + '-extrapolate-' + option + '{' + str(basis_family) + '}' + str(n)+'/'+str(m) + '.inp'
+        else:
+            file_name = self.label + '_' + method + '-extrapolate-' + option + '{' + str(basis_family) + '}' + str(n) + '.inp'
+
+        if '/' in file_name:
+            file_name = file_name.replace('/', '-')
+
+        if not os.path.exists(path):
+            os.makedirs(path)
+        file_path = os.path.join(path, file_name)
+
+        base = self.base + method + '_extrapolate_' + option + basis_family 
+        if '(' in base or '#' in base or '/' in base:
+            base = base.replace('(', '{').replace(')', '}').replace(
+                '#', '=-').replace('/', '-')
+
+        with open(file_path, 'w') as f:
+            f.write('# {0}/{1} extrapolation {2} for {3} \n'.format(method, basis_family, option,self.label))
+            if option == 'ep3':
+                f.write('! {0} Extrapolate{1}({2},{3},{4}) {5}'.format(
+                    hf.upper(),option.upper(),basis_family,method,method_details,scf_convergence)
+                )
+            elif option == 'ep2':
+                f.write('! {0} Extrapolate{1}({2}/{3},{4},{5},{6}) {7}'.format(
+                    hf.upper(),option.upper(),n,m,basis_family,method,method_details,scf_convergence)
+                )
+            elif option == '2':
+                f.write('! {0} {1} AutoAux Extrapolate({2}/{3},{4}) {5}'.format(
+                    hf.upper(),method.upper(),n,m,basis_family,scf_convergence)
+                )
+            elif option == '3':
+                f.write('! {0} {1} AutoAux Extrapolate({2},{3}) {4}'.format(
+                    hf.upper(),method.upper(),n,basis_family,scf_convergence)
+                )
+            f.write('\n')
+            f.write('%pal nprocs {0} end \n'.format(nprocs))
+            f.write('%maxcore {0}\n'.format(mem_proc))
+            f.write('%base "{0}" \n'.format(base))
+            f.write('*xyz {0} {1}\n'.format(self.charge, self.mult))
+            f.write(self.coords)
+            f.write('*\n')
+
     def check_NormalTermination(self,path):
         """
         checks if an Orca job terminated normally.
