@@ -34,9 +34,12 @@ import logging
 
 class Orca():
 
-    def __init__(self,conformer=None):
+    def __init__(self,directory='.',conformer=None):
         
         self.command = 'orca'
+        self.directory = directory
+        if not os.path.exists(directory):
+            os.makedirs(self.directory)
         if conformer:
             assert isinstance(conformer,Conformer),'conformer must be an autotst conformer object'
             self.conformer = conformer
@@ -70,7 +73,7 @@ class Orca():
     def __repr__(self):
         return '<Orca Calculator>'
 
-    def write_fod_input(self,path='.'):
+    def write_fod_input(self,directory=None):
         """
         Generates input files to run finite temperaure DFT to determine the Fractional Occupation number weighted Density (FOD number).
         Uses the default functional, basis set, and SmearTemp (TPSS, def2-TZVP, 5000 K) in Orca.
@@ -80,10 +83,14 @@ class Orca():
         """
 
         assert None not in [self.mult,self.charge,self.coords]
+        
+        if directory is None:
+            directory = self.directory
+        else:
+            if not os.path.exists(directory):
+                os.makedirs(directory)
 
-        if not os.path.exists(path):
-            os.makedirs(path)
-        outfile = os.path.join(path,self.label+'_fod.inp')
+        outfile = os.path.join(directory,self.label+'_fod.inp')
 
         with open(outfile, 'w') as f:
             f.write('# FOD anaylsis for {} \n'.format(self.label))
@@ -96,7 +103,7 @@ class Orca():
             f.write(self.coords)
             f.write('*\n')
 
-    def write_sp_input(self, path='.', nprocs=20, mem='110gb', method = 'ccsd(t)-f12', basis= 'cc-pvdz-f12',
+    def write_sp_input(self, directory=None, nprocs=20, mem='110gb', method = 'ccsd(t)-f12', basis= 'cc-pvdz-f12',
                         scf_convergence = 'verytightscf', max_iter = '600'):
         """
         A method to write single point energy calculation input files for ORCA.
@@ -112,6 +119,12 @@ class Orca():
         """
         
         assert None not in [self.mult, self.charge, self.coords]
+
+        if directory is None:
+            directory = self.directory
+        else:
+            if not os.path.exists(directory):
+                os.makedirs(directory)
 
         nprocs = int(nprocs)
         mem = mem.lower()
@@ -193,9 +206,7 @@ class Orca():
         if '/' in file_name:
             file_name = file_name.replace('/','-')
 
-        if not os.path.exists(path):
-            os.makedirs(path)
-        file_path = os.path.join(path,file_name)
+        file_path = os.path.join(directory,file_name)
 
         base = self.base + '_' + method + '_' + basis
         if '(' in base or '#' in base or '/' in base:
@@ -212,11 +223,19 @@ class Orca():
             f.write('*xyz {0} {1}\n'.format(self.charge, self.mult))
             f.write(self.coords)
             f.write('*\n')
+        
+        return file_name
     
-    def write_extrapolation_input(self, path='.', nprocs=20, mem='110gb', option='EP3', basis_family='aug-cc', 
+    def write_extrapolation_input(self, directory='.', nprocs=20, mem='110gb', option='EP3', basis_family='aug-cc', 
                                 scf_convergence='Tightscf', method='DLPNO-CCSD(T)', method_details='tightpno', 
                                 n=3, m=4):
 
+        if directory is None:
+            directory = self.directory
+        else:
+            if not os.path.exists(directory):
+                os.makedirs(directory)
+        
         option = str(option).lower()
         basis_family = basis_family.lower()
         method = method.lower()
@@ -265,9 +284,7 @@ class Orca():
         if '/' in file_name:
             file_name = file_name.replace('/', '-')
 
-        if not os.path.exists(path):
-            os.makedirs(path)
-        file_path = os.path.join(path, file_name)
+        file_path = os.path.join(directory, file_name)
 
         base = self.base + method + '_extrapolate_' + option + basis_family 
         if '(' in base or '#' in base or '/' in base:
@@ -299,6 +316,8 @@ class Orca():
             f.write('*xyz {0} {1}\n'.format(self.charge, self.mult))
             f.write(self.coords)
             f.write('*\n')
+
+        return file_name
 
     def check_NormalTermination(self,path):
         """
