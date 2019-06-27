@@ -60,7 +60,7 @@ class Orca():
             self.label = self.conformer.smiles
 
         if '(' in self.label or '#' in self.label:
-            self.base = label.replace('(', '{').replace(')', '}').replace('#', '=-')
+            self.base = self.label.replace('(', '{').replace(')', '}').replace('#', '=-')
         else:
             self.base = self.label
 
