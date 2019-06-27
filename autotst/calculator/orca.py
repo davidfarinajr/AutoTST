@@ -100,7 +100,7 @@ class Orca():
 
         outfile = os.path.join(directory,self.label+'_fod.inp')
 
-        with open(outfile, 'w') as f:
+        with open(outfile, 'w+') as f:
             f.write('# FOD anaylsis for {} \n'.format(self.label))
             f.write('! FOD \n')
             f.write('\n')
@@ -130,9 +130,8 @@ class Orca():
 
         if directory is None:
             directory = self.directory
-        else:
-            if not os.path.exists(directory):
-                os.makedirs(directory)
+        if not os.path.exists(directory):
+            os.makedirs(directory)
 
         nprocs = int(nprocs)
         mem = mem.lower()
@@ -220,7 +219,7 @@ class Orca():
         if '(' in base or '#' in base or '/' in base:
             base = base.replace('(', '{').replace(')', '}').replace('#', '=-').replace('/','-')
 
-        with open(file_path, 'w') as f:
+        with open(file_path, 'w+') as f:
             f.write('# {0}/{1} calculation for {2} \n'.format(method,basis,self.label))
             f.write('! {0} {1} {2} {3} {4}\n'.format(hf.upper(),method.upper(),basis.upper(),aux_basis.upper(),scf_convergence.upper()))
             f.write('\n')
@@ -234,15 +233,14 @@ class Orca():
         
         return file_name
     
-    def write_extrapolation_input(self, directory='.', nprocs=20, mem='110gb', option='EP3', basis_family='aug-cc', 
+    def write_extrapolation_input(self, directory=None, nprocs=20, mem='110gb', option='EP3', basis_family='aug-cc', 
                                 scf_convergence='Tightscf', method='DLPNO-CCSD(T)', method_details='tightpno', 
                                 n=3, m=4):
 
         if directory is None:
             directory = self.directory
-        else:
-            if not os.path.exists(directory):
-                os.makedirs(directory)
+        if not os.path.exists(directory):
+            os.makedirs(directory)
         
         option = str(option).lower()
         basis_family = basis_family.lower()
@@ -299,7 +297,7 @@ class Orca():
             base = base.replace('(', '{').replace(')', '}').replace(
                 '#', '=-').replace('/', '-')
 
-        with open(file_path, 'w') as f:
+        with open(file_path, 'w+') as f:
             f.write('# {0}/{1} extrapolation {2} for {3} \n'.format(method, basis_family, option,self.label))
             if option == 'ep3':
                 f.write('! {0} Extrapolate{1}({2},{3},{4}) {5}'.format(
