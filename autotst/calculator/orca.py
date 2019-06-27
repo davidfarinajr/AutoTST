@@ -41,12 +41,23 @@ class Orca():
         if not os.path.exists(directory):
             os.makedirs(self.directory)
         if conformer:
-            assert isinstance(conformer,Conformer),'conformer must be an autotst conformer object'
+            assert isinstance(conformer, Conformer), 'conformer must be an autotst conformer object'
             self.conformer = conformer
-            if isinstance(conformer, TS):
-                self.label = self.conformer.reaction_label
-            else:
-                self.label = self.conformer.smiles
+            self.load_conformer_attributes()
+        else:
+            self.label = None
+            self.conformer = None
+        
+    def __repr__(self):
+        return '<Orca Calculator>'
+
+    def load_conformer_attributes(self):
+        assert self.conformer is not None,'Must provide an AutoTST conformer object'
+        assert isinstance(self.conformer,Conformer),'conformer must be an autotst conformer object'
+        if isinstance(self.conformer, TS):
+            self.label = self.conformer.reaction_label
+        else:
+            self.label = self.conformer.smiles
 
         if '(' in self.label or '#' in self.label:
             self.base = label.replace('(', '{').replace(')', '}').replace('#', '=-')
@@ -69,9 +80,6 @@ class Orca():
             logging.warning('could not get coordinates of conformer...setting coords to None')
             self.coords = None
 
-        
-    def __repr__(self):
-        return '<Orca Calculator>'
 
     def write_fod_input(self,directory=None):
         """
