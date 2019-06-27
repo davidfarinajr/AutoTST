@@ -751,7 +751,7 @@ class Job():
             if single_point:
                 
                 conformer = Conformer(smiles=species.smiles[0])
-                log = os.path.join(self.calculator.directory,"species",conformer.smiles,conformer.smiles+".log")
+                log = os.path.join(self.directory,"species",conformer.smiles,conformer.smiles+".log")
                 assert os.path.exists(log), "It appears the calculation failed for {}...cannot perform single point calculations".format(conformer.smiles)
                 atoms = self.read_log(log)
                 conformer.ase_molecule = atoms
@@ -764,6 +764,7 @@ class Job():
                     if isinstance(self.sp_calcultor,Orca):
                         self.sp_calculator.directory = sp_dir
                         self.sp_calculator.conformer = conformer
+                        self.sp_calculator.load_conformer_attributes()
 
                 labels = self.generate_sp_inputs(conformer=conformer)
 
