@@ -729,7 +729,7 @@ class Job():
                 if self.sp_calculator is None:
                     self.sp_calculator = Orca(directory=sp_dir,conformer=conformer)
                 else:
-                    if isinstance(self.sp_calcultor,Orca):
+                    if isinstance(self.sp_calculator,Orca):
                         self.sp_calculator.directory = sp_dir
                         self.sp_calculator.conformer = conformer
                         self.sp_calculator.load_conformer_attributes()
