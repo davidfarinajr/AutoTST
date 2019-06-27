@@ -758,6 +758,8 @@ class Job():
                 conformer.update_coords_from("ase")
 
                 sp_dir = os.path.join(self.directory,"species",conformer.smiles,"sp")
+                if not os.path.exists(sp_dir):
+                    os.makedirs(sp_dir)
                 if self.sp_calculator is None:
                     self.sp_calculator = Orca(directory=sp_dir,conformer=conformer)
                 else:
