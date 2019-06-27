@@ -47,6 +47,7 @@ class Job():
             reactions=None,
             load_species_from_reactions = False,
             calculator=None, # An AutoTST Gaussian calculator with proper directory settings
+            sp_calculator=None,
             conformer_calculator = None, # an ASE Calculator object
             partition="general", # The partition to run calculations on
             directory = None, # where to save your files 
@@ -119,6 +120,10 @@ class Job():
             else:
                 self.scratch = scratch
         
+        self.sp_calculator = sp_calculator
+        if self.sp_calculator:
+            assert isinstance(self.sp_calculator,Orca)
+
         self.conformer_calculator = conformer_calculator
         if self.conformer_calculator:
             self.conformer_calculator.directory = self.scratch
@@ -456,67 +461,56 @@ class Job():
 
     def generate_sp_inputs(self,conformer):
 
-        if isinstance(conformer, TS):
-            sp_dir = os.path.join(self.directory, "ts",
-                                   conformer.reaction_label, "sp")
-            dir = os.path.join(self.directory, "ts",conformer.reaction_label)
+        if self.sp_calculator is None:
+            logging.info('A single point calculator was not specified')
+            logging.info('Setting single point calc to orca calculator')
+            directory = os.path.join(self.directory,"species",conformer.smiles,"sp")
+            self.sp_calculator = Orca(directory=directory,conformer=conformer)
+
+        if isinstance(self.sp_calculator,Orca):
+            orca_calc = self.sp_calculator
+
+            hf1 = orca_calc.write_sp_input(method='hf',basis='aug-cc-pvqz')
+            hf2 = orca_calc.write_sp_input(method='hf',basis='ma-def2-qzvp')
+        
+            ex1 = orca_calc.write_extrapolation_input(option='ep3')
+            ex2 = orca_calc.write_extrapolation_input(option='ep3',basis_family='cc')
+
+            ex3 = orca_calc.write_extrapolation_input(option='3',method='dlpno-ccsd(t)')
+            ex4 = orca_calc.write_extrapolation_input(option='3',method='dlpno-ccsd(t)',basis_family='cc')
+
+            ex5 = orca_calc.write_extrapolation_input(option='3',method='ccsd(t)')
+            ex6 = orca_calc.write_extrapolation_input(option='3',method='ccsd(t)',basis_family='cc')
+
+            if 35 not in conformer.ase_molecule.get_atomic_numbers():
+                hf3 = orca_calc.write_sp_input(method='hf',basis='cc-pvqz-f12')
+                sp1 = orca_calc.write_sp_input(method='ccsd(t)-f12',basis='cc-pvdz-f12')
+                sp2 = orca_calc.write_sp_input(method='ccsd(t)-f12',basis='cc-pvtz-f12')
+                files = [hf1,hf2,hf3,sp1,sp2,ex1,ex2,ex3,ex4,ex5,ex6]
+                labels= [f.strip('inp') for f in files]
+            else:
+                files = [hf1,hf2,ex1,ex2,ex3,ex4,ex5,ex6]
+                labels= [f.strip('.inp') for f in files]
+
+            return labels
+        
         else:
-            sp_dir = os.path.join(
-                self.directory, "species", conformer.smiles, "sp")
-            dir = os.path.join(self.directory, "species",
-                               conformer.smiles)
+            logging.info("We currently do not support single point calculations for {}".format(self.sp_calculator))
+            return None
 
-        if not os.path.exists(sp_dir):
-            os.makedirs(sp_dir)
-
-        # Get orca calculator instance
-        # for lowest energy conformer
-        orca_calc = Orca(directory=sp_dir,conformer=conformer)
-
-        hf1 = orca_calc.write_sp_input(method='hf',basis='aug-cc-pvqz')
-        hf2 = orca_calc.write_sp_input(method='hf',basis='ma-def2-qzvp')
-    
-        ex1 = orca_calc.write_extrapolation_input(option='ep3')
-        ex2 = orca_calc.write_extrapolation_input(option='ep3',basis_family='cc')
-
-        ex3 = orca_calc.write_extrapolation_input(option='3',method='dlpno-ccsd(t)')
-        ex4 = orca_calc.write_extrapolation_input(option='3',method='dlpno-ccsd(t)',basis_family='cc')
-
-        ex5 = orca_calc.write_extrapolation_input(option='3',method='ccsd(t)')
-        ex6 = orca_calc.write_extrapolation_input(option='3',method='ccsd(t)',basis_family='cc')
-
-        if 35 not in conformer.ase_molecule.get_atomic_numbers():
-            hf3 = orca_calc.write_sp_input(method='hf',basis='cc-pvqz-f12')
-            sp1 = orca_calc.write_sp_input(method='ccsd(t)-f12',basis='cc-pvdz-f12')
-            sp2 = orca_calc.write_sp_input(method='ccsd(t)-f12',basis='cc-pvtz-f12')
-            files = [hf1,hf2,hf3,sp1,sp2,ex1,ex2,ex3,ex4,ex5,ex6]
-            labels= [f.strip('inp') for f in files]
-        else:
-            files = [hf1,hf2,ex1,ex2,ex3,ex4,ex5,ex6]
-            labels= [f.strip('.inp') for f in files]
-
-        return labels
 
 
     def calculate_sp(self,conformer,label):
     
-        if isinstance(conformer, TS):
-            sp_dir = os.path.join(self.directory, "ts",
-                                   conformer.reaction_label, "sp")
-            dir = os.path.join(self.directory, "ts",
-                               conformer.reaction_label)
-        else:
-            sp_dir = os.path.join(
+        if self.sp_calculator is None:
+            logging.info('A single point calculator was not specified')
+            logging.info('Setting single point calc to orca calculator')
+            directory = os.path.join(
                 self.directory, "species", conformer.smiles, "sp")
-            dir = os.path.join(self.directory, "species",
-                               conformer.smiles)
+            self.sp_calculator = Orca(directory=directory, conformer=conformer)
 
-        if not os.path.exists(sp_dir):
-            os.makedirs(sp_dir)
-
-        # Get orca calculator instance
-        # for lowest energy conformer
-        orca_calc = Orca(directory=sp_dir,conformer=conformer)
+        if isinstance(self.sp_calculator,Orca):
+            orca_calc = self.sp_calculator
 
         file_path = os.path.join(orca_calc.directory, label)
 
@@ -534,8 +528,7 @@ class Job():
                 logging.info("The single point calculation completed! The log file is {}".format(
                     file_path + ".log"))
                 copyfile(
-                    file_path + ".log", os.path.join(dir, file_path + ".log"))
-                labels.remove(label)
+                    file_path + ".log", os.path.join(self.directory, conformer.smiles, label + ".log"))
                 return True
                 
             else:
@@ -548,8 +541,8 @@ class Job():
             logging.info(
                 "Starting {} single point calculation for {}".format(file_path,conformer))
             subprocess.call(
-                """sbatch --exclusive --exclude=c5003,c3040 --job-name="{0}" --output="{1}.log" --error="{1}.slurm.log" -p general -N 1 -n 20 -t 01-00:00:00 --mem=110GB $AUTOTST/autotst/job/orca_submit.sh""".format(
-                    label,file_path), shell=True)
+                """sbatch --exclusive --exclude=c5003,c3040 --job-name="{0}" --output="{1}.log" --error="{1}.slurm.log" -p {2} -N 1 -n 20 -t 01-00:00:00 --mem=110GB $AUTOTST/autotst/job/orca_submit.sh""".format(
+                    label,file_path,self.partition), shell=True)
         
         while not self.check_complete(label):
             time.sleep(30)
@@ -560,7 +553,7 @@ class Job():
                 logging.info("The single point calculation {} completed! The log file is {}".format(label,
                     file_path + ".log"))
                 copyfile(
-                    file_path + ".log", os.path.join(dir, file_path + ".log"))
+                    file_path + ".log", os.path.join(self.directory, conformer.smiles, label + ".log"))
                 return True
             else:
                 logging.info("It appears the single point calculation {} did not terminate normally".format(label))
@@ -717,44 +710,58 @@ class Job():
                 # with the lowest energy logfile
                 conformer = Conformer(smiles=species.smiles[0])
                 log = os.path.join(self.calculator.directory,"species",conformer.smiles,conformer.smiles+".log")
+                assert os.path.exists(log),"It appears the calculation failed for {}...cannot calculate fod".format(conformer.smiles)
                 atoms = self.read_log(log)
                 conformer.ase_molecule = atoms
                 conformer.update_coords_from("ase")
                 self.calculate_fod(conformer=conformer)
 
-            if str(single_point).lower() in ['orca','true']:
+            if single_point:
                 
                 conformer = Conformer(smiles=species.smiles[0])
                 log = os.path.join(self.calculator.directory,"species",conformer.smiles,conformer.smiles+".log")
+                assert os.path.exists(log), "It appears the calculation failed for {}...cannot perform single point calculations".format(conformer.smiles)
                 atoms = self.read_log(log)
                 conformer.ase_molecule = atoms
                 conformer.update_coords_from("ase")
 
+                sp_dir = os.path.join(self.directory,"species",conformer.smiles,"sp")
+                if self.sp_calculator is None:
+                    self.sp_calculator = Orca(directory=sp_dir,conformer=conformer)
+                else:
+                    if isinstance(self.sp_calcultor,Orca):
+                        self.sp_calculator.directory = sp_dir
+                        self.sp_calculator.conformer = conformer
+
                 labels = self.generate_sp_inputs(conformer=conformer)
 
-                currently_running = []
-                processes = {}
+                if labels is not None:
 
-                for label in labels:
+                    currently_running = []
+                    processes = {}
 
-                    process = Process(target=self.calculate_sp, args=(
-                            conformer,label))
-                    processes[process.name] = process
+                    for label in labels:
 
-                for name, process in list(processes.items()):
-                    while len(currently_running) >= 50:
-                        for running in currently_running:
-                            if not running.is_alive():
-                                currently_running.remove(name)
-                    process.start()
-                    currently_running.append(name)
+                        process = Process(target=self.calculate_sp, args=(
+                                conformer,label))
+                        processes[process.name] = process
 
-                while len(currently_running) > 0:
                     for name, process in list(processes.items()):
-                        if not (name in currently_running):
-                            continue
-                        if not process.is_alive():
-                            currently_running.remove(name)
+                        while len(currently_running) >= 50:
+                            for running in currently_running:
+                                if not running.is_alive():
+                                    currently_running.remove(name)
+                        process.start()
+                        currently_running.append(name)
+
+                    while len(currently_running) > 0:
+                        for name, process in list(processes.items()):
+                            if not (name in currently_running):
+                                continue
+                            if not process.is_alive():
+                                currently_running.remove(name)
+                else:
+                    logging.info('Could not perform single point calcs because single point calculator provided is not currently supported')
 
         logging.info(calculation_status)
         if False in calculation_status.values() or len(calculation_status.values()) == 0:
