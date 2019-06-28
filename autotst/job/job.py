@@ -240,8 +240,7 @@ class Job():
         file_path = os.path.join(ase_calculator.scratch, label)
 
         os.environ["COMMAND"] = self.calculator.command  # only using gaussian for now
-        os.environ["FILE_PATH"] = file_path
-
+        os.environ["FILE_PATH"] = label
         
         attempted = False
         if os.path.exists(file_path + ".log"):
@@ -268,24 +267,9 @@ class Job():
                 )
             else:
                 logging.info("Starting calculations for {}".format(conformer))
-
-            if self.exclude:
-                if isinstance(self.exclude, str):
-                    command = """sbatch --exclude={2} --job-name="{0}" --output="{0}.slurm.log" --error="{0}.slurm.log" -p {1} -N 1 -n {3} -t 24:00:00 --mem=120GB $AUTOTST/autotst/job/submit.sh""".format(
-                        label, self.partition, self.exclude, nproc)
-                elif isinstance(self.exclude, list):
-                    exc = ""
-                    for e in self.exclude:
-                        exc += e
-                        exc += ","
-                    exc = exc[:-1]
-                    command = """sbatch --exclude={2} --job-name="{0}" --output="{0}.slurm.log" --error="{0}.slurm.log" -p {1} -N 1 -n {3} -t 24:00:00 --mem=120GB $AUTOTST/autotst/job/submit.sh""".format(
-                        label, self.partition, exc, nproc)
-            else:
-                command = """sbatch --job-name="{0}" --output="{0}.slurm.log" --error="{0}.slurm.log" -p {1} -N 1 -n {2} -t 24:00:00 --mem=120GB $AUTOTST/autotst/job/submit.sh""".format(
-                    label, self.partition, nproc)
-
-            subprocess.call(command, shell=True)
+            subprocess.Popen(
+                """sbatch --exclude=c5003,c3040 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p {1} -N 1 -n 20 -t 12:00:00 --mem=60GB $AUTOTST/autotst/job/submit.sh""".format(
+                    label, self.partition), shell=True, cwd=os.path.join(self.directory,"species",conformer.smiles,"conformers"))
 
         return label
 
@@ -434,8 +418,8 @@ class Job():
 
         # Get orca calculator instance 
         # for lowest energy conformer
-        orca_calc = Orca(conformer=conformer)
-        orca_calc.write_fod_input(fod_dir)
+        orca_calc = Orca(directory=fod_dir,conformer=conformer)
+        orca_calc.write_fod_input()
 
         # Assign FOD label for calulation and filepath 
         # to save input and output
@@ -443,7 +427,7 @@ class Job():
 
         # Assign environment variables with orca command and path
         os.environ["COMMAND"] = orca_calc.command
-        os.environ["FILE_PATH"] = file_path
+        os.environ["FILE_PATH"] = label
 
         # Do not run orca if log file is already there
         attempted = False
@@ -467,9 +451,9 @@ class Job():
         if not attempted or not complete:
             logging.info(
                 "Starting FOD calculation for {}".format(conformer))
-            subprocess.call(
-                """sbatch --exclude=c5003,c3040 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p test -N 1 -n 4 -t 01:00:00 --mem=1GB $AUTOTST/autotst/job/orca_submit.sh""".format(
-                    label), shell=True)
+            subprocess.Popen(
+                """sbatch --exclude=c5003,c3040 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p test -N 1 -n 4 -t 01:00:00 --mem=5GB $AUTOTST/autotst/job/orca_submit.sh""".format(
+                    label), shell=True, cwd=orca_calc.directory)
 
         # wait unitl the job is done
         while not self.check_complete(label):
@@ -546,7 +530,7 @@ class Job():
 
         file_path = os.path.join(orca_calc.directory, label)
 
-        os.environ["FILE_PATH"] = file_path
+        os.environ["FILE_PATH"] = label
 
         # Do not run orca if log file is already there
         attempted = False
@@ -572,9 +556,9 @@ class Job():
         if not attempted or not complete:
             logging.info(
                 "Starting {} single point calculation for {}".format(file_path,conformer))
-            subprocess.call(
-                """sbatch --exclusive --exclude=c5003,c3040 --job-name="{0}" --output="{1}.log" --error="{1}.slurm.log" -p {2} -N 1 -n 20 -t 01-00:00:00 --mem=110GB $AUTOTST/autotst/job/orca_submit.sh""".format(
-                    label,file_path,self.partition), shell=True)
+            subprocess.Popen(
+                """sbatch --exclusive --exclude=c5003,c3040 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p {1} -N 1 -n 20 -t 01-00:00:00 --mem=110GB $AUTOTST/autotst/job/orca_submit.sh""".format(
+                    label,self.partition), shell=True, cwd=orca_calc.directory)
         
         while not self.check_complete(label):
             time.sleep(30)
