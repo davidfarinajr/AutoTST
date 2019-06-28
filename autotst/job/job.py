@@ -303,6 +303,7 @@ class Job():
         logging.info(
             "Submitting conformer calculation for {}".format(calc.label))
         label = self.submit_conformer(conformer)
+        time.sleep(5)
         while not self.check_complete(label):
             time.sleep(15)
 
@@ -312,6 +313,7 @@ class Job():
             logging.info(
                 "It seems that the file never completed for {} completed, running it again".format(calc.label))
             label = self.submit_conformer(conformer, restart=True)
+            time.sleep(5)
             while not self.check_complete(label):
                 time.sleep(15)
 
@@ -326,6 +328,7 @@ class Job():
             logging.info(
                 "It appears that {} was killed prematurely".format(calc.label))
             label = self.submit_conformer(conformer, restart=True)
+            time.sleep(5)
             while not self.check_complete(label):
                 time.sleep(15)
 
@@ -353,6 +356,7 @@ class Job():
             os.remove(os.path.join(scratch_dir, f))
 
             label = self.submit_conformer(conformer)
+            time.sleep(5)
             while not self.check_complete(label):
                 time.sleep(15)
 
@@ -438,10 +442,10 @@ class Job():
             subprocess.Popen(
                 """sbatch --exclude=c5003,c3040 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p test -N 1 -n 4 -t 01:00:00 --mem=5GB $AUTOTST/autotst/job/orca_submit.sh""".format(
                     label), shell=True, cwd=orca_calc.directory)
-
+            time.sleep(5)
         # wait unitl the job is done
         while not self.check_complete(label):
-            time.sleep(15)
+            time.sleep(5)
 
         # If the log file exits, check to see if it terminated normally
         if os.path.exists(file_path + ".log"):
@@ -543,9 +547,10 @@ class Job():
             subprocess.Popen(
                 """sbatch --exclusive --exclude=c5003,c3040 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p {1} -N 1 -n 20 -t 01-00:00:00 --mem=110GB $AUTOTST/autotst/job/orca_submit.sh""".format(
                     label,self.partition), shell=True, cwd=orca_calc.directory)
-        
+            time.sleep(5)
+
         while not self.check_complete(label):
-            time.sleep(30)
+            time.sleep(15)
 
                 # If the log file exits, check to see if it terminated normally
         if os.path.exists(file_path + ".log"):
@@ -1271,6 +1276,7 @@ class Job():
                     break
 
             label = self.submit_conformer(conformer)
+            time.sleep(5)
 
             while not self.check_complete(label):
                 time.sleep(15)
