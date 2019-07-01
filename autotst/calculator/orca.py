@@ -34,7 +34,7 @@ import logging
 
 class Orca():
 
-    def __init__(self,directory='.',conformer=None):
+    def __init__(self,conformer=None,directory='.',partition='general',time='1-00:00:00',nprocs=20,mem=110):
         
         self.command = 'orca'
         self.directory = directory
@@ -47,7 +47,38 @@ class Orca():
         else:
             self.label = None
             self.conformer = None
+
+        self.nprocs = int(nprocs)
+        self.mem = str(mem).upper()
+        self.time = str(time)
+        self.partition = partition
+
+        self.mem_per_proc = self.get_mem_per_proc()
         
+    def get_mem_per_proc(self,mem=None,nprocs=None):
+
+        if mem is None:
+            assert self.mem is not None
+            mem = str(self.mem).upper()
+        else:
+            mem = str(mem).upper()
+        if nprocs is None:
+            assert self.nprocs is not None
+            nprocs = int(self.nprocs)
+        else:
+            nprocs = int(nprocs)
+
+        if 'GB' in mem:
+            mem_mb = float(mem.strip('GB')) * 1000
+        elif 'MB' in mem:
+            mem_mb = float(mem.strip('MB'))
+        else:  # assume GB
+            mem_mb = float(mem) * 1000
+        
+        mem_per_proc = int(mem_mb/nprocs)
+
+        return mem_per_proc
+
     def __repr__(self):
         return '<Orca Calculator>'
 
@@ -111,7 +142,7 @@ class Orca():
             f.write(self.coords)
             f.write('*\n')
 
-    def write_sp_input(self, directory=None, nprocs=20, mem='110gb', method = 'ccsd(t)-f12', basis= 'cc-pvdz-f12',
+    def write_sp_input(self, directory=None, nprocs=None, mem=None, method = 'ccsd(t)-f12', basis= 'cc-pvdz-f12', atom_basis = {'Cl':'cc-pvt(+d)z','Br':'aug-cc-pvtz'}, use_atom_basis = False,
                         scf_convergence = 'verytightscf', max_iter = '600'):
         """
         A method to write single point energy calculation input files for ORCA.
@@ -128,13 +159,25 @@ class Orca():
         
         assert None not in [self.mult, self.charge, self.coords]
 
+        if (mem or nprocs) is not None:
+            if (mem and nprocs) is not None:
+                mem_per_proc = self.get_mem_per_proc(mem=mem,nprocs=nprocs)
+            elif nprocs is not None:
+                mem = self.mem
+                mem_per_proc = self.get_mem_per_proc(nprocs=nprocs)
+            else:
+                nprocs = self.nprocs
+                mem_per_proc = self.get_mem_per_proc(mem=mem)
+        else:
+            mem_per_proc = self.mem_per_proc
+            mem = self.mem
+            nprocs = self.nprocs
+
         if directory is None:
             directory = self.directory
         if not os.path.exists(directory):
             os.makedirs(directory)
 
-        nprocs = int(nprocs)
-        mem = mem.lower()
         method = method.lower()
         basis = basis.lower()
         scf_convergence = scf_convergence.lower()
@@ -146,40 +189,6 @@ class Orca():
         
         scf_convergence_options = 'normalscf loosescf sloppyscf strongscf tightscf verytightscf extremescf'
         assert scf_convergence in scf_convergence_options
-
-
-        if 'gb' in mem:
-            mem_mb = float(mem.strip('gb')) * 1000
-        elif 'mb' in mem:
-            mem_mb = float(mem.strip('mb'))
-        else: #assume GB
-            mem_mb = float(mem) * 1000
-        mem_proc = int(mem_mb/nprocs)
-
-        if 'dz' in basis:
-            basis_label = 'dz'
-        elif 'tz' in basis:
-            basis_label = 'tz'
-        elif 'qz' in basis:
-            basis_label = 'qz'
-        elif '5z' in basis:
-            basis_label = '5z'
-        elif '6z' in basis:
-            basis_label = '6z'
-        else:
-            basis_label = basis
-        if 'aug' in basis:
-            basis_label = 'a' + basis_label
-
-        if 'f12' in method and 'f12' not in basis:
-            logging.warning('An F12 method was called, but an f12 basis set was not chosen')
-            logging.info('trying to find an f12 basis...')
-            if 'cc' in basis:
-                basis = 'cc-pv{}-f12'.format(basis_label.strip('a'))
-                logging.info('{} will be used for the f12 calculation'.format(basis))
-            else:
-                logging.info(
-                    'Could not find f12 basis set. {} will be used for the f12 calculation'.format(basis))
 
         if 'hf' not in method:
             if int(self.mult) == 1:
@@ -206,27 +215,47 @@ class Orca():
         else:
             aux_basis = ''
 
+        if use_atom_basis is True:
+            assert atom_basis is not None
+            assert isinstance(atom_basis,dict)
+            new_basis_list = []
+            atom_symbols = [atom.lower() for atom in self.conformer.ase_molecule.get_chemical_symbols()]
+            for atom, b in atom_basis.iteritems():
+                if atom.lower() in atom_symbols:
+                    new_basis_list.append('  newGTO {} "{}" end\n'.format(atom, b))
+        
+
         if method == 'ccsd(t)-f12' and int(self.mult) != 1:
             method = 'ccsd(t)-f12/ri'
 
-        file_name = self.label + '_' + method + '{' + str(basis) + '}' + '.inp'
+        if use_atom_basis is True and len(new_basis_list) > 0:
+            file_name = self.label + '_' + method + '{' + str(basis) + '}' + 'WithAtomBasis' + '.inp'
+        else:
+            file_name = self.label + '_' + method + '{' + str(basis) + '}' + '.inp'
+
         if '/' in file_name:
             file_name = file_name.replace('/','-')
 
         file_path = os.path.join(directory,file_name)
 
         base = self.base + '_' + method + '_' + basis
+        if use_atom_basis is True and len(new_basis_list) > 0:
+            base = base + 'with_atom_basis'
         if '(' in base or '#' in base or '/' in base:
             base = base.replace('(', '{').replace(')', '}').replace('#', '=-').replace('/','-')
 
         with open(file_path, 'w+') as f:
             f.write('# {0}/{1} calculation for {2} \n'.format(method,basis,self.label))
-            f.write('! {0} {1} {2} {3} {4}\n'.format(hf.upper(),method.upper(),basis.upper(),aux_basis.upper(),scf_convergence.upper()))
+            f.write('! {0} {1} {2} {3} {4} PRINTBASIS\n'.format(hf.upper(),method.upper(),basis.upper(),aux_basis.upper(),scf_convergence.upper()))
             f.write('\n')
             f.write('%pal nprocs {0} end \n'.format(nprocs))
-            f.write('%maxcore {0}\n'.format(mem_proc))
+            f.write('%maxcore {0}\n'.format(mem_per_proc))
             f.write('%scf\n  MaxIter  {0}\nend\n'.format(max_iter))
             f.write('%base "{0}" \n'.format(base))
+            if use_atom_basis is True and len(new_basis_list) > 0:
+                f.write('%basis\n')
+                f.writelines(new_basis_list)
+                f.write('end\n')
             f.write('*xyz {0} {1}\n'.format(self.charge, self.mult))
             f.write(self.coords)
             f.write('*\n')
@@ -236,6 +265,20 @@ class Orca():
     def write_extrapolation_input(self, directory=None, nprocs=20, mem='110gb', option='EP3', basis_family='aug-cc', 
                                 scf_convergence='Tightscf', method='DLPNO-CCSD(T)', method_details='tightpno', 
                                 n=3, m=4):
+
+        if (mem or nprocs) is not None:
+            if (mem and nprocs) is not None:
+                mem_per_proc = self.get_mem_per_proc(mem=mem, nprocs=nprocs)
+            elif nprocs is not None:
+                mem = self.mem
+                mem_per_proc = self.get_mem_per_proc(nprocs=nprocs)
+            else:
+                nprocs = self.nprocs
+                mem_per_proc = self.get_mem_per_proc(mem=mem)
+        else:
+            mem_per_proc = self.mem_per_proc
+            mem = self.mem
+            nprocs = self.nprocs
 
         if directory is None:
             directory = self.directory
@@ -247,14 +290,6 @@ class Orca():
         method = method.lower()
         scf_convergence= scf_convergence.lower()
         mem = mem.lower()
-
-        if 'gb' in mem:
-            mem_mb = float(mem.strip('gb')) * 1000
-        elif 'mb' in mem:
-            mem_mb = float(mem.strip('mb'))
-        else:  # assume GB
-            mem_mb = float(mem) * 1000
-        mem_proc = int(mem_mb/nprocs)
         
         scf_convergence_options = 'normalscf loosescf sloppyscf strongscf tightscf verytightscf extremescf'
         assert scf_convergence in scf_convergence_options
@@ -317,7 +352,7 @@ class Orca():
                 )
             f.write('\n')
             f.write('%pal nprocs {0} end \n'.format(nprocs))
-            f.write('%maxcore {0}\n'.format(mem_proc))
+            f.write('%maxcore {0}\n'.format(mem_per_proc))
             f.write('%base "{0}" \n'.format(base))
             f.write('*xyz {0} {1}\n'.format(self.charge, self.mult))
             f.write(self.coords)
