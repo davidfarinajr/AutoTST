@@ -505,25 +505,22 @@ class Job():
         if isinstance(self.sp_calculator,Orca):
             orca_calc = self.sp_calculator
 
-            hf1 = orca_calc.write_sp_input(method='hf',basis='aug-cc-pvqz',atom_basis = {'Cl':'cc-pvq(+d)z'},use_atom_basis = True)
-            hf2 = orca_calc.write_sp_input(method='hf',basis='ma-def2-qzvpp')
+            hf = orca_calc.write_sp_input(method='hf',basis='ma-def2-qzvpp')
         
             ex1 = orca_calc.write_extrapolation_input(option='ep3')
-            ex2 = orca_calc.write_extrapolation_input(option='3',method='dlpno-ccsd(t)')
-            ex3 = orca_calc.write_extrapolation_input(option='3',method='ccsd(t)')
+            ex2 = orca_calc.write_extrapolation_input(option='3',method='ccsd(t)')
 
             sp1 = orca_calc.write_sp_input(
                 method='ccsd(t)', basis='aug-cc-pvtz', atom_basis={'Cl':'cc-pvt(+d)z','H':'cc-pvtz'}, use_atom_basis=True)
+            sp2 = orca_calc.write_sp_input(
+                method='ccsd(t)', basis='aug-cc-pvqz', atom_basis={'Cl':'cc-pvq(+d)z','H':'cc-pvqz'}, use_atom_basis=True)
 
             if 35 not in conformer.ase_molecule.get_atomic_numbers():
-                hf3 = orca_calc.write_sp_input(method='hf', basis='cc-pvqz-f12', atom_basis={'Cl': 'cc-pv5(+d)z'}, use_atom_basis=True)
-                sp2 = orca_calc.write_sp_input(method='ccsd(t)-f12', basis='cc-pvdz-f12', atom_basis={'Cl': 'cc-pvt(+d)z'}, use_atom_basis=True)
-                sp3 = orca_calc.write_sp_input(method='ccsd(t)-f12', basis='cc-pvtz-f12', atom_basis={'Cl': 'cc-pvq(+d)z'}, use_atom_basis=True)
-                files = [hf1,hf2,hf3,sp1,sp2,sp3,ex1,ex2,ex3]
-                labels= [f.strip('inp') for f in files]
+                sp3 = orca_calc.write_sp_input(method='ccsd(t)-f12', basis='cc-pvdz-f12', atom_basis={'Cl': 'cc-pvt(+d)z'}, use_atom_basis=True)
+                sp4 = orca_calc.write_sp_input(method='ccsd(t)-f12', basis='cc-pvtz-f12', atom_basis={'Cl': 'cc-pvq(+d)z'}, use_atom_basis=True)
+                labels = [hf,sp1,sp2,sp3,sp4,ex1,ex2]
             else:
-                files = [hf1,hf2,sp1,ex1,ex2,ex3]
-                labels= [f.strip('.inp') for f in files]
+                labels = [hf,sp1,sp2,ex1,ex2]
 
             return labels
         
