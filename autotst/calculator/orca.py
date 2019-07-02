@@ -236,6 +236,8 @@ class Orca():
         if '/' in file_name:
             file_name = file_name.replace('/','-')
 
+        label = file_name.strip('.inp')
+
         file_path = os.path.join(directory,file_name)
 
         base = self.base + '_' + method + '_' + basis
@@ -260,10 +262,10 @@ class Orca():
             f.write(self.coords)
             f.write('*\n')
         
-        return file_name
+        return label
     
     def write_extrapolation_input(self, directory=None, nprocs=20, mem='110gb', option='EP3', basis_family='aug-cc', 
-                                scf_convergence='Tightscf', method='DLPNO-CCSD(T)', method_details='tightpno', 
+                                scf_convergence='verytightscf', method='DLPNO-CCSD(T)', method_details='tightpno', 
                                 n=3, m=4):
 
         if (mem or nprocs) is not None:
@@ -325,6 +327,8 @@ class Orca():
         if '/' in file_name:
             file_name = file_name.replace('/', '-')
 
+        label = file_name.strip('.inp')
+
         file_path = os.path.join(directory, file_name)
 
         base = self.base + method + '_extrapolate_' + option + basis_family 
@@ -358,7 +362,7 @@ class Orca():
             f.write(self.coords)
             f.write('*\n')
 
-        return file_name
+        return label
 
     def check_NormalTermination(self,path):
         """
