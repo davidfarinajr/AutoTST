@@ -542,7 +542,7 @@ class Job():
                 logging.info("The single point calculation completed! The log file is {}".format(
                     file_path + ".log"))
                 copyfile(
-                    file_path + ".log", os.path.join(self.directory, conformer.smiles, label + ".log"))
+                    file_path + ".log", os.path.join(self.directory, "species", conformer.smiles, label + ".log"))
                 return True
                 
             else:
@@ -572,7 +572,7 @@ class Job():
                 logging.info("The single point calculation {} completed! The log file is {}".format(label,
                     file_path + ".log"))
                 copyfile(
-                    file_path + ".log", os.path.join(self.directory, conformer.smiles, label + ".log"))
+                    file_path + ".log", os.path.join(self.directory, "species", conformer.smiles, label + ".log"))
                 return True
             else:
                 logging.info("It appears the single point calculation {} did not terminate normally".format(label))
