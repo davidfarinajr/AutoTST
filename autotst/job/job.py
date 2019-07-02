@@ -547,7 +547,7 @@ class Job():
 
         file_path = os.path.join(orca_calc.directory, label)
 
-        os.environ["FILE_PATH"] = label
+        os.environ["label"] = label
 
         # Do not run orca if log file is already there
         attempted = False
