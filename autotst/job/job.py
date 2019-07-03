@@ -445,23 +445,28 @@ class Job():
         file_path = os.path.join(fod_dir, label)
 
         # Assign environment variables with orca command and path
-        os.environ["COMMAND"] = orca_calc.command
-        os.environ["FILE_PATH"] = label
+        os.environ["label"] = label
 
         # Do not run orca if log file is already there
         attempted = False
         complete = False
-        if os.path.exists(file_path + ".log"):
+
+        if os.path.exists(file_path + ".log") or os.path.exists(os.path.join(dir, label + ".log")):
             attempted = True
             logging.info(
                 "It appears that this job has already been run")
-            if orca_calc.check_NormalTermination(file_path + ".log"):
-                complete = True
-                logging.info("The FOD calculation completed! The FOD log file is {}".format(
-                    file_path + ".log"))
-                copyfile(
-                    file_path + ".log", os.path.join(dir, label + ".log"))
-                return True
+            if os.path.exists(os.path.join(dir, label + ".log")):
+                if orca_calc.check_NormalTermination(os.path.join(dir, label + ".log")):
+                    complete = True
+                    logging.info("The FOD calculation completed!")
+                    return True
+            elif os.path.exists(file_path + ".log"):
+                if orca_calc.check_NormalTermination(file_path + ".log"):
+                    complete = True
+                    logging.info("The FOD calculation completed!")
+                    copyfile(
+                        file_path + ".log", os.path.join(dir, label + ".log"))
+                    return True
             else:
                 logging.info("It appears the FOD job did not terminate normally! Trying FOD job again")
                 complete = False
