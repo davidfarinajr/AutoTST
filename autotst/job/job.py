@@ -782,24 +782,24 @@ class Job():
                 if total_valence <= 8:
                     nprocs = 2
                     mem = '12GB'
-                    time = '01:00:00'
+                    t = '01:00:00'
                     partition = 'test'
                 elif total_valence >8 and total_valence <=14:
                     nprocs = 10
                     mem = '60GB'
-                    time = '1-00:00:00'
+                    t = '1-00:00:00'
                     partition = 'general'
                 else:
                     nprocs = 20
                     mem = '110GB'
-                    time = '1-00:00:00'
+                    t = '1-00:00:00'
                     partition = 'general'        
 
                 sp_dir = os.path.join(self.directory,"species",conformer.smiles,"sp")
                 if not os.path.exists(sp_dir):
                     os.makedirs(sp_dir)
                 if self.sp_calculator is None:
-                    self.sp_calculator = Orca(directory=sp_dir,conformer=conformer,nprocs=nprocs,mem=mem,time=time,partition=partition)
+                    self.sp_calculator = Orca(directory=sp_dir,conformer=conformer,nprocs=nprocs,mem=mem,time=t,partition=partition)
                 else:
                     if isinstance(self.sp_calculator,Orca):
                         self.sp_calculator.directory = sp_dir
@@ -807,7 +807,7 @@ class Job():
                         self.sp_calculator.nprocs = nprocs
                         self.sp_calculator.mem = mem
                         self.sp_calculator.mem_per_proc = self.sp_calculator.get_mem_per_proc()
-                        self.sp_calculator.time = time
+                        self.sp_calculator.time = t
                         self.sp_calculator.partition = partition
                         self.sp_calculator.load_conformer_attributes()
 
