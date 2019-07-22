@@ -71,10 +71,66 @@ except ImportError:
 
 class Reaction():
 
-    rmg_database = None   # will be an RMGDatabase instance, once loaded.
     # a dictionary will have reaction family names as keys and
     # TransitionStates instances as values, once loaded.
+    global ts_databases
+    global rmg_database
     ts_databases = dict()
+    rmg_database = RMGDatabase()
+
+    database_path = rmgpy.settings['database.directory']
+    logging.info("Loading RMG database from '{}'".format(database_path))
+    families = [  # These families (and only these) will be loaded from both RMG and AutoTST databases
+            "R_Addition_MultipleBond",
+            "H_Abstraction",
+            "intra_H_migration"]
+    try:
+        rmg_database.load(
+                    database_path,
+                    kineticsFamilies=["R_Addition_MultipleBond",
+                                        "H_Abstraction",
+                                        "intra_H_migration"],
+                    transportLibraries=[],
+                    reactionLibraries=[],
+                    seedMechanisms=[],
+                    thermoLibraries=[
+                        'primaryThermoLibrary',
+                        'thermo_DFT_CCSDTF12_BAC',
+                        'CBS_QB3_1dHR'],
+                    solvation=False,
+                )
+    except IOError:
+        logging.info(
+            "RMG database not found at '{}'. This can occur if a git repository of the database is being"
+            "used rather than the binary version".format(database_path))
+        database_path = os.path.join(database_path, 'input')
+        logging.info(
+            "Loading RMG database instead from '{}'".format(database_path))
+        rmg_database.load(
+            database_path,
+            kineticsFamilies=self.possible_families,
+            transportLibraries=[],
+            reactionLibraries=[],
+            seedMechanisms=[],
+            thermoLibraries=[
+                'primaryThermoLibrary',
+                'thermo_DFT_CCSDTF12_BAC',
+                'CBS_QB3_1dHR'],
+            solvation=False,
+        )
+    
+    for reaction_family in families:
+        ts_database = TransitionStates()
+        path = os.path.join(
+            autotst.settings['tst_database_path'],
+            reaction_family)
+        global_context = {'__builtins__': None}
+        local_context = {'DistanceData': DistanceData}
+        family = rmg_database.kinetics.families[reaction_family]
+        family_copy = deepcopy(family)
+        ts_database.family = family_copy
+        ts_database.load(path, local_context, global_context)
+        ts_databases[reaction_family] = ts_database
 
     def __init__(
             self,
@@ -90,9 +146,9 @@ class Reaction():
 
         self.label = label
         self.rmg_reaction = rmg_reaction
+        self.rmg_database = rmg_database
+        self.ts_databases = ts_databases
         self.reaction_family = reaction_family
-        self.rmg_database = None
-        self.ts_databases = None
         self._ts = None
         self._distance_data = None
 
@@ -149,7 +205,7 @@ class Reaction():
         return self._distance_data
 
     @classmethod
-    def load_databases(self, force_reload=False):
+    def load_databases(self, rmg_database_path=None, force_reload=False):
         """
         Load the RMG and AutoTST databases, if they have not already been loaded,
         into the class level variables where they are stored.
@@ -164,7 +220,11 @@ class Reaction():
             return self.rmg_database, self.ts_databases
 
         rmg_database = RMGDatabase()
-        database_path = rmgpy.settings['database.directory']
+
+        if rmg_database_path is None:
+            database_path = rmgpy.settings['database.directory']
+        else:
+            database_path = rmg_database_path
 
         logging.info("Loading RMG database from '{}'".format(database_path))
 
@@ -217,8 +277,9 @@ class Reaction():
                 reaction_family)
             global_context = {'__builtins__': None}
             local_context = {'DistanceData': DistanceData}
-            family = rmg_database.kinetics.families[reaction_family]
-            ts_database.family = family
+            family = self.rmg_database.kinetics.families[reaction_family]
+            family_copy = deepcopy(family)
+            ts_database.family = family_copy
             ts_database.load(path, local_context, global_context)
 
             self.ts_databases[reaction_family] = ts_database
