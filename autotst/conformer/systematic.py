@@ -49,7 +49,7 @@ from autotst.conformer.utilities import get_energy, find_terminal_torsions
 
 def find_all_combos(
         conformer,
-        delta=float(6),
+        delta=float(60),
         cistrans=True,
         chiral_centers=True):
     """
@@ -102,7 +102,7 @@ def find_all_combos(
 
 
 def systematic_search(conformer,
-                      delta=float(6),
+                      delta=float(60),
                       cistrans=True,
                       chiral_centers=True,
                       ):
