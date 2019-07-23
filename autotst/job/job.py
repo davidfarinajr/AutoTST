@@ -993,7 +993,7 @@ class Job():
             elif opt_type == 'overall':
                 overall_results[transitionstate] = True
 
-        if opt_type == 'overall'
+        if opt_type == 'overall':
             logging.info(
                 "Calculations for {} are complete and resulted in a normal termination!".format(ts_identifier))
 
@@ -1168,13 +1168,14 @@ class Job():
 
             currently_running = []
             processes = {}
+            opt_type = 'shell'
 
             for direction, transitionstates in list(self.reaction.ts.items()):
 
                 for transitionstate in transitionstates:
 
                     process = Process(target=self.calculate_transitionstate, args=(
-                        transitionstate=transitionstate,opt_type='shell'))
+                        transitionstate,opt_type))
                     processes[process.name] = process
 
             for name, process in list(processes.items()):
