@@ -631,7 +631,7 @@ u"""
 entry(
     index = 2,
     label = "Y_rad_birad_trirad_quadrad",
-    group = "OR{Hrad, Orad, Crad}",
+    group = "OR{Hrad, Orad, Crad, F_rad, Cl_rad, Br_rad}",
     distances = DistanceData(distances={}),
 )
 
