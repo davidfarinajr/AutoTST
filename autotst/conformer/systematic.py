@@ -49,7 +49,7 @@ from autotst.conformer.utilities import get_energy, find_terminal_torsions
 
 def find_all_combos(
         conformer,
-        delta=float(60),
+        delta=float(6),
         cistrans=True,
         chiral_centers=True):
     """
@@ -102,7 +102,7 @@ def find_all_combos(
 
 
 def systematic_search(conformer,
-                      delta=float(60),
+                      delta=float(6),
                       cistrans=True,
                       chiral_centers=True,
                       ):
@@ -263,8 +263,8 @@ def systematic_search(conformer,
         results.append(values)
 
     df = pd.DataFrame(results, columns=["energy", "arrays", 'distances'])
-    df = df[df.energy < df.energy.min() + units.kcal / units.mol /
-            units.eV].sort_values("energy")
+    df = df[df.energy < df.energy.min() + (5.0 * units.kcal / units.mol /
+            units.eV)].sort_values("energy")
 
     tolerance = 0.1
     scratch_index = []
