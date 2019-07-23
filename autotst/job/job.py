@@ -861,7 +861,7 @@ class Job():
         file_path = os.path.join(scratch, label)
 
         os.environ["COMMAND"] = "g16"  # only using gaussian for now
-        os.environ["FILE_PATH"] = file_path
+        os.environ["FILE_PATH"] = label
 
         attempted = False
         if os.path.exists(file_path + ".log"):
@@ -869,10 +869,10 @@ class Job():
             logging.info("It appears that {} has already been attempted...".format(label))
 
         if (not attempted) or restart:
-            subprocess.call(
+            subprocess.Popen((
                 """sbatch --exclude=c5003,c3040 --job-name="{0}" --output="{0}.slurm.log" --error="{0}.slurm.log" -p {1} -N 1 -n 20 --mem=60GB -t {2} $AUTOTST/autotst/job/submit.sh""".format(
-                    label, self.partition, time), shell=True)
-
+                    label, self.partition, time), shell=True, cwd=scratch)
+        
         return label
 
     def calculate_transitionstate(self, transitionstate, opt_type, vibrational_analysis=True):
@@ -911,7 +911,7 @@ class Job():
             label = self.submit_transitionstate(
                 transitionstate, opt_type=opt_type.lower())
             time.sleep(5)
-            while not self.check_complete(label=label,user=self.discovery_username,partition=self.partition):
+            while not self.check_complete(label=label, user=self.discovery_username, partition=self.partition):
                 time.sleep(15)
 
         else:
@@ -926,7 +926,7 @@ class Job():
                 label = self.submit_transitionstate(
                     transitionstate, opt_type=opt_type.lower(), restart=True)
                 time.sleep(5)
-                while not self.check_complete(label):
+                while not self.check_complete(label,,user=self.discovery_username,partition=self.partition)):
                     time.sleep(15)
 
             complete, converged = self.calculator.verify_output_file(file_path)
