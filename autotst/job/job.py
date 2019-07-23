@@ -139,9 +139,12 @@ class Job():
             
         self.partition = partition
 
-        manager = multiprocessing.Manager()
-        global global_results
-        global_results = manager.dict()
+        manager_overall = multiprocessing.Manager()
+        manager_shell = multiprocessing.Manager()
+        global overall_results
+        global shell_results
+        shell_results = manager_shell.dict()
+        overall_results = manager_overall.dict()
 
         if self.scratch and not os.path.exists(self.scratch):
             os.makedirs(self.scratch)
@@ -915,80 +918,93 @@ class Job():
 
         return label
 
-    def calculate_transitionstate(self, transitionstate, vibrational_analysis=True):
+    def calculate_transitionstate(self, transitionstate, opt_type, vibrational_analysis=True):
         """
         A method to perform the partial optimizations for a transitionstate and arrive
         at a final geometry. Returns True if we arrived at a final geometry, returns false
         if there is an error along the way.
         """
 
+        opt_type = opt_type.lower()
+
+        assert opt_type in ["shell", "overall"], "Only 'shell' and 'overall' are supported opt types"
+
         ts_identifier = "{}_{}_{}".format(
             transitionstate.reaction_label, transitionstate.direction, transitionstate.index)
 
-        for opt_type in ["shell", "overall"]:
-            self.calculator.conformer = transitionstate
+        self.calculator.conformer = transitionstate
 
-            if opt_type == "overall":
-                 file_path = "{}_{}_{}.log".format(transitionstate.reaction_label, transitionstate.direction, transitionstate.index)
-            else:
-                 file_path = "{}_{}_{}_{}.log".format(transitionstate.reaction_label, transitionstate.direction, opt_type, transitionstate.index)
+        if opt_type == "overall":
+            file_path = "{}_{}_{}.log".format(transitionstate.reaction_label, transitionstate.direction, transitionstate.index)
+        else:
+            file_path = "{}_{}_{}_{}.log".format(transitionstate.reaction_label, transitionstate.direction, opt_type, transitionstate.index)
 
-            file_path = os.path.join(
-                self.directory, 
-                "ts", 
-                transitionstate.reaction_label, 
-                "conformers", 
-                file_path
-            )
+        file_path = os.path.join(
+            self.directory, 
+            "ts", 
+            transitionstate.reaction_label, 
+            "conformers", 
+            file_path
+        )
 
 
-            if not os.path.exists(file_path):
+        if not os.path.exists(file_path):
+            logging.info(
+                "Submitting {} calculations for {}".format(opt_type.upper(),ts_identifier))
+            label = self.submit_transitionstate(
+                transitionstate, opt_type=opt_type.lower())
+            time.sleep(5)
+            while not self.check_complete(label=label,user=self.discovery_username,partition=self.partition):
+                time.sleep(15)
+
+        else:
+            logging.info(
+                "It appears that we already have a complete {} log file for {}".format(opt_type.upper(), ts_identifier))
+
+            complete, converged = self.calculator.verify_output_file(file_path)
+            
+            if not complete:
                 logging.info(
-                    "Submitting {} calculations for {}".format(opt_type.upper(),ts_identifier))
+                    "It seems that the {} file never completed for {} never completed, running it again".format(opt_type.upper(), ts_identifier))
                 label = self.submit_transitionstate(
-                    transitionstate, opt_type=opt_type.lower())
+                    transitionstate, opt_type=opt_type.lower(), restart=True)
                 time.sleep(5)
-                while not self.check_complete(label=label,user=self.discovery_username,partition=self.partition):
+                while not self.check_complete(label):
                     time.sleep(15)
-
-            else:
-                logging.info(
-                    "It appears that we already have a complete {} log file for {}".format(opt_type.upper(), ts_identifier))
-
-                complete, converged = self.calculator.verify_output_file(file_path)
-                
-                if not complete:
-                    logging.info(
-                        "It seems that the {} file never completed for {} never completed, running it again".format(opt_type.upper(), ts_identifier))
-                    label = self.submit_transitionstate(
-                        transitionstate, opt_type=opt_type.lower(), restart=True)
-                    time.sleep(5)
-                    while not self.check_complete(label):
-                        time.sleep(15)
 
             complete, converged = self.calculator.verify_output_file(file_path)
 
             if not (complete and converged):
                 logging.info(
                     "{} failed the {} optimization".format(ts_identifier, opt_type.upper()))
-                global_results[ts_identifier] = False
+                if opt_type == 'overall':
+                    overall_results[transitionstate] = False
+                elif opt_type == 'shell':
+                    shell_results[transitionstate] = False
                 return False
+            
             logging.info(
                 "{} successfully completed the {} optimization!".format(ts_identifier, opt_type.upper()))
             transitionstate.ase_molecule = self.read_log(file_path)
             transitionstate.update_coords_from("ase")
+            if opt_type == 'shell':
+                shell_results[transitionstate] = True
+                return True
+            elif opt_type == 'overall':
+                overall_results[transitionstate] = True
 
-        logging.info(
-            "Calculations for {} are complete and resulted in a normal termination!".format(ts_identifier))
+        if opt_type == 'overall'
+            logging.info(
+                "Calculations for {} are complete and resulted in a normal termination!".format(ts_identifier))
 
-        got_one = self.validate_transitionstate(
-                transitionstate=transitionstate, vibrational_analysis=vibrational_analysis)
-        if got_one:
-            global_results[ts_identifier] = True
-            return True
-        else:
-            global_results[ts_identifier] = False
-            return False
+            got_one = self.validate_transitionstate(
+                    transitionstate=transitionstate, vibrational_analysis=vibrational_analysis)
+            if got_one:
+                overall_results[transitionstate] = True
+                return True
+            else:
+                overall_results[transitionstate] = False
+                return False
 
     def check_irc_folder(self, reaction):
         """
@@ -1158,7 +1174,7 @@ class Job():
                 for transitionstate in transitionstates:
 
                     process = Process(target=self.calculate_transitionstate, args=(
-                        transitionstate,))
+                        transitionstate=transitionstate,opt_type='shell'))
                     processes[process.name] = process
 
             for name, process in list(processes.items()):
@@ -1176,12 +1192,15 @@ class Job():
                     if not process.is_alive():
                         currently_running.remove(name)
 
-            energies = []
-            for label, result in global_results.items():
+            shell_energies = []
+            for transitionstate, result in shell_results.items():
+                label = "{}_{}_{}".format(
+                transitionstate.reaction_label, transitionstate.direction, transitionstate.index)
+                file_path = "{}_{}_shell_{}.log".format(transitionstate.reaction_label, transitionstate.direction,transitionstate.index)
                 if not result:
                     logging.info("Calculations for {} FAILED".format(label))
                     continue
-                f = "{}.log".format(label)
+                f = "{}.log".format(file_path)
                 path = os.path.join(self.calculator.directory, "ts",
                         self.reaction.label, "conformers", f)
                 if not os.path.exists(path):
@@ -1199,30 +1218,87 @@ class Job():
                         "The parser does not have an scf energies attribute, we are not considering {}".format(f))
                     energy = 1e5
 
-                energies.append([energy, transitionstate, f])
+                shell_energies.append([energy, transitionstate, transitionstate.ase_molecule.get_all_distances(), f])
 
-            energies = pd.DataFrame(
-                energies, columns=["energy", "transitionstate", "file"]).sort_values("energy").reset_index()
+            shell_energies = pd.DataFrame(
+                energies, columns=["energy", "transitionstate", "distances", "file"]).sort_values("energy").reset_index()
 
-            if energies.shape[0] == 0:
+            if shell_energies.shape[0] == 0:
                 logging.info(
                     "No transition state for {} was successfully calculated... :(".format(self.reaction))
                 continue
                 calculation_status[self.reaction] = False
 
-            energies.reset_index(inplace=True)
-            lowest_energy_label = energies.iloc[0].file
-            logging.info("The lowest energy transition state is {}".format(lowest_energy_label))
+            # remove Conformers with similar structures based on RMSD calc
+            tolerance = 0.1
+            scratch_index = []
+            unique_index = []
+            for index in shell_energies.index:
+                if index in scratch_index:
+                    continue
+                unique_index.append(index)
+                scratch_index.append(index)
+                distances = shell_energies.distances[index]
+                for other_index in shell_energies.index:
+                    if other_index in scratch_index:
+                        continue
 
-            copyfile(
-                os.path.join(self.calculator.directory, "ts", self.reaction.label,
-                            "conformers", lowest_energy_label),
-                os.path.join(self.calculator.directory, "ts",
-                            self.reaction.label, self.reaction.label + ".log")
-            )
-            logging.info("The lowest energy file is {}! :)".format(
-                lowest_energy_label + ".log"))
-            calculation_status[self.reaction] = True
+                    other_distances = shell_energies.distances[other_index]
+
+                    if tolerance > np.sqrt((distances - other_distances)**2).mean():
+                        scratch_index.append(other_index)
+
+            drop_index = []
+            for index in scratch_index:
+                if index not in unique_index:
+                    drop_index.append(index)
+
+            shell_energies.drop(drop_index,inplace=True)
+            shell_energies.reset_index(inplace=True)
+            
+            lowest_energy_file = shell_energies.file[0]
+            lowest_energy_ts = shell_energies.transitionstate[0]
+            lowest_energy_label = "{}_{}_{}".format(
+                lowest_energy_ts.reaction_label, lowest_energy_ts.direction, lowest_energy_ts.index)
+
+            logging.info("The lowest energy conformer after shell optimization is {}".format(lowest_energy_label))
+            logging.info("Attempting overall optimization of {}".format(lowest_energy_label))
+
+            result = calculate_transitionstate(transitionstate=lowest_energy_ts,opt_type='overall')
+            
+            if not result:
+                if shell_energies.shape[0] > 1:
+                    lowest_energy_file = shell_energies.file[1]
+                    lowest_energy_ts = shell_energies.transitionstate[1]
+                    lowest_energy_label = "{}_{}_{}".format(
+                    lowest_energy_ts.reaction_label, lowest_energy_ts.direction, lowest_energy_ts.index)
+                    logging.info("Attempting overall optimization of {}".format(lowest_energy_label))
+                    result = calculate_transitionstate(transitionstate=lowest_energy_ts,opt_type='overall')
+
+                    if not result:
+                        if shell_energies.shape[0] > 2:
+                            lowest_energy_file = shell_energies.file[2]
+                            lowest_energy_ts = shell_energies.transitionstate[2]
+                            lowest_energy_label = "{}_{}_{}".format(
+                            lowest_energy_ts.reaction_label, lowest_energy_ts.direction, lowest_energy_ts.index)
+                            logging.info("Attempting overall optimization of {}".format(lowest_energy_label))
+                            result = calculate_transitionstate(transitionstate=lowest_energy_ts,opt_type='overall')
+
+            if result:
+
+                copyfile(
+                    os.path.join(self.calculator.directory, "ts", self.reaction.label,
+                                "conformers", lowest_energy_label + ".log"),
+                    os.path.join(self.calculator.directory, "ts",
+                                self.reaction.label, self.reaction.label + ".log")
+                )
+                logging.info("The lowest energy file is {}! :)".format(
+                    lowest_energy_label + ".log"))
+                calculation_status[self.reaction] = True
+
+            else:
+                calculation_status[self.reaction] = False
+                continue
         
             if calculate_fod:  # We will run an orca FOD job
 
