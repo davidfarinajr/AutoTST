@@ -965,9 +965,9 @@ class Job():
                 logging.info(
                     "{} failed the {} optimization".format(ts_identifier, opt_type.upper()))
                 if opt_type == 'overall':
-                    overall_results[transitionstate] = False
+                    overall_results[file_path] = False
                 elif opt_type == 'shell':
-                    shell_results[transitionstate] = False
+                    shell_results[file_path] = False
                 return False
             
             logging.info(
@@ -975,10 +975,10 @@ class Job():
             transitionstate.ase_molecule = self.read_log(file_path)
             transitionstate.update_coords_from("ase")
             if opt_type == 'shell':
-                shell_results[transitionstate] = True
+                shell_results[file_path] = True
                 return True
             elif opt_type == 'overall':
-                overall_results[transitionstate] = True
+                overall_results[file_path] = True
 
         if opt_type == 'overall':
             logging.info(
@@ -987,10 +987,10 @@ class Job():
             got_one = self.validate_transitionstate(
                     transitionstate=transitionstate, vibrational_analysis=vibrational_analysis)
             if got_one:
-                overall_results[transitionstate] = True
+                overall_results[file_path] = True
                 return True
             else:
-                overall_results[transitionstate] = False
+                overall_results[file_path] = False
                 return False
 
     def check_irc_folder(self, reaction):
@@ -1181,16 +1181,15 @@ class Job():
                         currently_running.remove(name)
 
             shell_energies = []
-            for transitionstate, result in shell_results.items():
-                label = "{}_{}_{}".format(
-                transitionstate.reaction_label, transitionstate.direction, transitionstate.index)
-                file_path = "{}_{}_shell_{}.log".format(transitionstate.reaction_label, transitionstate.direction,transitionstate.index)
+            for file_path, result in shell_results.items():
                 if not result:
-                    logging.info("Calculations for {} FAILED".format(label))
+                    logging.info("Calculations for {} FAILED".format(file_path))
                     continue
                 f = "{}.log".format(file_path)
                 path = os.path.join(self.calculator.directory, "ts",
                         self.reaction.label, "conformers", f)
+                transitionstate.ase_molecule = self.read_log(path)
+                transitionstate.update_coords_from("ase")
                 if not os.path.exists(path):
                     logging.info("It appears that {} failed...".format(f))
                     continue
