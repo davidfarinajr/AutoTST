@@ -185,7 +185,7 @@ def systematic_search(conformer,
         """
 
         labels = []
-        for bond in conformer.bonds:
+        for bond in conformer.get_bonds():
             labels.append(bond.atom_indices)
 
         if isinstance(conformer, TS):
@@ -216,11 +216,21 @@ def systematic_search(conformer,
         from ase.constraints import FixBondLengths
         c = FixBondLengths(labels)
         conformer.ase_molecule.set_constraint(c)
-
         conformer.ase_molecule.set_calculator(calculator)
-
         opt = BFGS(conformer.ase_molecule, logfile=None)
-        opt.run(fmax=0.1)
+
+        if type == 'species':
+            opt.run()
+        
+        if type == 'ts':
+            result = False
+            reaction_center_labels = conformer.get_labels()[0]
+            reaction_center_forces = conformer.ase_molecule.get_forces()[reaction_center_labels]
+            max_reaction_center_force = np.sqrt((reaction_center_forces**2).sum(axis=1).max())
+            result = opt.run(fmax=0.5 * max_reaction_center_force)
+            if not result:
+                result = opt.run(fmax=max_reaction_center_force)
+            
         conformer.update_coords_from("ase")
         energy = get_energy(conformer)
         return_dict[i] = (energy, conformer.ase_molecule.arrays,
