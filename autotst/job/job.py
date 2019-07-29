@@ -257,6 +257,10 @@ class Job():
         label = conformer.smiles + "_{}".format(conformer.index)
         file_path = os.path.join(ase_calculator.scratch, label)
 
+        gaussian_scratch = os.environ['GAUSS_SCRDIR']
+        if not os.path.exists(gaussian_scratch):
+            os.makedirs(gaussian_scratch)
+
         os.environ["COMMAND"] = self.calculator.command  # only using gaussian for now
         os.environ["FILE_PATH"] = label
         
@@ -266,6 +270,10 @@ class Job():
             if not restart:
                 logging.info(
                     "It appears that this job has already been run, not running it a second time.")
+
+        if not self.check_complete(label=label, user=self.discovery_username, partition=self.partition):
+            logging.info("It appears that {} is already in the queue...not submitting".format(label))
+            return label
 
         if restart or not attempted:
             copy_molecule = conformer.rmg_molecule.copy()
@@ -333,11 +341,10 @@ class Job():
             conformer.smiles,
             "conformers")
         f = calc.label + ".log"
-
         logging.info(
             "Submitting conformer calculation for {}".format(calc.label))
         label = self.submit_conformer(conformer)
-        time.sleep(5)
+        time.sleep(15)
         while not self.check_complete(label=label,user=self.discovery_username,partition=self.partition):
             time.sleep(15)
 
@@ -479,11 +486,11 @@ class Job():
             logging.info(
                 "Starting FOD calculation for {}".format(conformer))
             subprocess.Popen(
-                """sbatch --exclude=c5003,c3040 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p test -N 1 -n 4 -t 01:00:00 --mem=5GB $AUTOTST/autotst/job/orca_submit.sh""".format(
+                """sbatch --exclude=c5003,c3040 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p general -N 1 -n 4 -t 10:00 --mem=5GB $AUTOTST/autotst/job/orca_submit.sh""".format(
                     label), shell=True, cwd=orca_calc.directory)
             time.sleep(5)
         # wait unitl the job is done
-        while not self.check_complete(label=label, user=self.discovery_username, partition="test"):
+        while not self.check_complete(label=label, user=self.discovery_username, partition="general"):
             time.sleep(5)
 
         # If the log file exits, check to see if it terminated normally
@@ -516,19 +523,21 @@ class Job():
             hf = orca_calc.write_sp_input(method='hf',basis='ma-def2-qzvpp')
         
             ex1 = orca_calc.write_extrapolation_input(option='ep3')
-            ex2 = orca_calc.write_extrapolation_input(option='3',method='ccsd(t)')
+            # ex2 = orca_calc.write_extrapolation_input(option='3',method='ccsd(t)')
 
-            sp1 = orca_calc.write_sp_input(
-                method='ccsd(t)', basis='aug-cc-pvtz', atom_basis={'Cl':'cc-pvt(+d)z','H':'cc-pvtz'}, use_atom_basis=True)
-            sp2 = orca_calc.write_sp_input(
-                method='ccsd(t)', basis='aug-cc-pvqz', atom_basis={'Cl':'cc-pvq(+d)z','H':'cc-pvqz'}, use_atom_basis=True)
+            # sp1 = orca_calc.write_sp_input(
+            #     method='ccsd(t)', basis='aug-cc-pvtz', atom_basis={'Cl':'cc-pvt(+d)z','H':'cc-pvtz'}, use_atom_basis=True)
+            # sp2 = orca_calc.write_sp_input(
+            #     method='ccsd(t)', basis='aug-cc-pvqz', atom_basis={'Cl':'cc-pvq(+d)z','H':'cc-pvqz'}, use_atom_basis=True)
 
             if 35 not in conformer.ase_molecule.get_atomic_numbers():
                 sp3 = orca_calc.write_sp_input(method='ccsd(t)-f12', basis='cc-pvdz-f12', atom_basis={'Cl': 'cc-pvt(+d)z'}, use_atom_basis=True)
                 sp4 = orca_calc.write_sp_input(method='ccsd(t)-f12', basis='cc-pvtz-f12', atom_basis={'Cl': 'cc-pvq(+d)z'}, use_atom_basis=True)
-                labels = [hf,sp1,sp2,sp3,sp4,ex1,ex2]
+                # labels = [hf,sp1,sp2,sp3,sp4,ex1,ex2]
+                labels = [hf,ex1,sp3,sp4]
             else:
-                labels = [hf,sp1,sp2,ex1,ex2]
+                # labels = [hf,sp1,sp2,ex1,ex2]
+                labels = [hf,ex1]
 
             return labels
         
@@ -585,7 +594,7 @@ class Job():
             subprocess.Popen(
                 """sbatch {0} --exclude=c5003,c3040 --job-name="{1}" --output="{1}.log" --error="{1}.slurm.log" -p {2} -N 1 -n {3} -t {4} --mem={5} $AUTOTST/autotst/job/orca_submit.sh""".format(
                     exclusive,label,orca_calc.partition,orca_calc.nprocs,orca_calc.time,orca_calc.mem), shell=True, cwd=orca_calc.directory)  
-            time.sleep(5)
+            time.sleep(15)
 
         while not self.check_complete(label=label, user=self.discovery_username, partition=orca_calc.partition):
             time.sleep(15)
@@ -828,10 +837,10 @@ class Job():
                         processes[process.name] = process
 
                     for name, process in list(processes.items()):
-                        while len(currently_running) >= 50:
-                            for running in currently_running:
-                                if not running.is_alive():
-                                    currently_running.remove(name)
+                        # while len(currently_running) >= 50:
+                        #     for running in currently_running:
+                        #         if not running.is_alive():
+                        #             currently_running.remove(name)
                         process.start()
                         currently_running.append(name)
 
@@ -890,6 +899,7 @@ class Job():
         scratch = ase_calculator.scratch
         file_path = os.path.join(scratch, label)
 
+        os.environ['GAUSS_SCRDIR'] = '.'
         os.environ["COMMAND"] = "g16"  # only using gaussian for now
         os.environ["FILE_PATH"] = label
 
@@ -898,9 +908,13 @@ class Job():
             attempted = True
             logging.info("It appears that {} has already been attempted...".format(label))
 
+        if not self.check_complete(label=label, user=self.discovery_username, partition=self.partition):
+            logging.info("It appears that {} is already in the queue...not submitting".format(label))
+            return label
+
         if (not attempted) or restart:
             subprocess.Popen(
-                """sbatch --exclude=c5003,c3040 --job-name="{0}" --output="{0}.slurm.log" --error="{0}.slurm.log" -p {1} -N 1 -n 20 --mem=60GB -t {2} $AUTOTST/autotst/job/submit.sh""".format(
+                """sbatch --exclude=c5003,c3040 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p {1} -N 1 -n 20 --mem=60GB -t {2} $AUTOTST/autotst/job/submit.sh""".format(
                     label, self.partition, time), shell=True, cwd=scratch)
         
         return label
@@ -939,8 +953,8 @@ class Job():
             logging.info(
                 "Submitting {} calculations for {}".format(opt_type.upper(),ts_identifier))
             label = self.submit_transitionstate(
-                transitionstate, opt_type=opt_type.lower())
-            time.sleep(5)
+                transitionstate, opt_type)    
+            time.sleep(15)
             while not self.check_complete(label=label, user=self.discovery_username, partition=self.partition):
                 time.sleep(15)
 
@@ -948,49 +962,45 @@ class Job():
             logging.info(
                 "It appears that we already have a complete {} log file for {}".format(opt_type.upper(), ts_identifier))
 
-            complete, converged = self.calculator.verify_output_file(file_path)
-            
-            if not complete:
-                logging.info(
-                    "It seems that the {} file never completed for {} never completed, running it again".format(opt_type.upper(), ts_identifier))
-                label = self.submit_transitionstate(
-                    transitionstate, opt_type=opt_type.lower(), restart=True)
-                time.sleep(5)
-                while not self.check_complete(label,user=self.discovery_username,partition=self.partition):
-                    time.sleep(15)
-
-            complete, converged = self.calculator.verify_output_file(file_path)
-
-            if not (complete and converged):
-                logging.info(
-                    "{} failed the {} optimization".format(ts_identifier, opt_type.upper()))
-                if opt_type == 'overall':
-                    overall_results[file_path] = False
-                elif opt_type == 'shell':
-                    shell_results[file_path] = False
-                return False
-            
+        complete, converged = self.calculator.verify_output_file(file_path)
+        
+        if not complete:
             logging.info(
-                "{} successfully completed the {} optimization!".format(ts_identifier, opt_type.upper()))
-            transitionstate.ase_molecule = self.read_log(file_path)
-            transitionstate.update_coords_from("ase")
-            if opt_type == 'shell':
-                shell_results[file_path] = True
-                return True
-            elif opt_type == 'overall':
-                overall_results[file_path] = True
+                "It seems that the {} file never completed for {} never completed, running it again".format(opt_type.upper(), ts_identifier))
+            label = self.submit_transitionstate(
+                transitionstate, opt_type=opt_type.lower(), restart=True)
+            time.sleep(15)
+            while not self.check_complete(label,user=self.discovery_username,partition=self.partition):
+                time.sleep(15)
+            complete, converged = self.calculator.verify_output_file(file_path)
 
-        if opt_type == 'overall':
+        if not (complete and converged):
+            logging.info(
+                "{} failed the {} optimization".format(ts_identifier, opt_type.upper()))
+            if opt_type == 'overall':
+                overall_results[ts_identifier] = False
+            elif opt_type == 'shell':
+                shell_results[ts_identifier] = False
+            return False
+        
+        logging.info(
+            "{} successfully completed the {} optimization!".format(ts_identifier, opt_type.upper()))
+        transitionstate.ase_molecule = self.read_log(file_path)
+        transitionstate.update_coords_from("ase")
+        if opt_type == 'shell':
+            shell_results[ts_identifier] = True
+            return True
+
+        elif opt_type == 'overall':
             logging.info(
                 "Calculations for {} are complete and resulted in a normal termination!".format(ts_identifier))
 
-            got_one = self.validate_transitionstate(
-                    transitionstate=transitionstate, vibrational_analysis=vibrational_analysis)
+            got_one = self.validate_transitionstate(transitionstate)
             if got_one:
-                overall_results[file_path] = True
+                overall_results[ts_identifier] = True
                 return True
             else:
-                overall_results[file_path] = False
+                overall_results[ts_identifier] = False
                 return False
 
     def check_irc_folder(self, reaction):
@@ -1005,7 +1015,7 @@ class Job():
             logging.info("It appears no irc jobs were run")
             return False
         else:
-            irc_logs = [l for l in os.listdir(irc_folder) if l.endswith('.log')]
+            irc_logs = [l for l in os.listdir(irc_folder) if l.endswith('.log') and 'slurm' not in l]
             for log in irc_logs:
                 if 'forward' in log:
                     direction = 'forward'
@@ -1018,7 +1028,8 @@ class Job():
                 result = self.calculator.validate_irc()
                 if result:
                     logging.info("{} successfully validated via irc!".format(label))
-                    if os.path.exists(self.directory, "ts", reaction.label, "conformers",label+'.log'):
+                    path = os.path.join(self.directory, "ts", reaction.label, "conformers",label+'.log')
+                    if os.path.exists(path):
                         got_one=True
                         copyfile(os.path.join(self.directory, "ts", self.reaction.label,"conformers", label +'.log'),
                                 os.path.join(self.directory, "ts", self.reaction.label, self.reaction.label + ".log")
@@ -1166,10 +1177,10 @@ class Job():
                     processes[process.name] = process
 
             for name, process in list(processes.items()):
-                while len(currently_running) >= 50:
-                    for running in currently_running:
-                        if not running.is_alive():
-                            currently_running.remove(name)
+                # while len(currently_running) >= 50:
+                #     for running in currently_running:
+                #         if not process.is_alive():
+                #             currently_running.remove(name)
                 process.start()
                 currently_running.append(name)
 
@@ -1181,20 +1192,25 @@ class Job():
                         currently_running.remove(name)
 
             shell_energies = []
-            for file_path, result in shell_results.items():
+            for ts_identifier, result in shell_results.items():
                 if not result:
-                    logging.info("Calculations for {} FAILED".format(file_path))
+                    logging.info("Shell calculation for {} FAILED".format(ts_identifier))
                     continue
-                f = "{}.log".format(file_path)
-                path = os.path.join(self.calculator.directory, "ts",
-                        self.reaction.label, "conformers", f)
-                transitionstate.ase_molecule = self.read_log(path)
+                direction = str(ts_identifier.split('_')[-2])
+                i = ts_identifier.split('_')[-1]
+                ts = self.reaction.ts[direction][0]
+                transitionstate = ts.copy()
+                transitionstate.index = i
+                f = "{}_{}_shell_{}.log".format(transitionstate.reaction_label, transitionstate.direction, transitionstate.index)
+                log_path = os.path.join(self.calculator.directory, "ts",
+                         self.reaction.label, "conformers", f)
+                if not os.path.exists(log_path):
+                    logging.info("It appears that {} failed...".format(log_path))
+                    continue
+                transitionstate.ase_molecule = self.read_log(log_path)
                 transitionstate.update_coords_from("ase")
-                if not os.path.exists(path):
-                    logging.info("It appears that {} failed...".format(f))
-                    continue
                 try:
-                    parser = ccread(path, loglevel=logging.ERROR)
+                    parser = ccread(log_path, loglevel=logging.ERROR)
                     if parser is None:
                         logging.info(
                             "Something went wrong when reading in results for {}...".format(f))
@@ -1205,11 +1221,11 @@ class Job():
                         "The parser does not have an scf energies attribute, we are not considering {}".format(f))
                     energy = 1e5
 
-                shell_energies.append([energy, transitionstate, transitionstate.ase_molecule.get_all_distances(), f])
+                shell_energies.append([energy, transitionstate, transitionstate.ase_molecule.get_all_distances(), log_path])
 
             shell_energies = pd.DataFrame(
-                energies, columns=["energy", "transitionstate", "distances", "file"]).sort_values("energy").reset_index()
-
+                shell_energies, columns=["energy", "transitionstate", "distances", "file"]).sort_values("energy").reset_index()
+      
             if shell_energies.shape[0] == 0:
                 logging.info(
                     "No transition state for {} was successfully calculated... :(".format(self.reaction))
@@ -1243,6 +1259,8 @@ class Job():
             shell_energies.drop(drop_index,inplace=True)
             shell_energies.reset_index(inplace=True)
             
+            print shell_energies.values()
+
             lowest_energy_file = shell_energies.file[0]
             lowest_energy_ts = shell_energies.transitionstate[0]
             lowest_energy_label = "{}_{}_{}".format(
@@ -1251,7 +1269,7 @@ class Job():
             logging.info("The lowest energy conformer after shell optimization is {}".format(lowest_energy_label))
             logging.info("Attempting overall optimization of {}".format(lowest_energy_label))
 
-            result = calculate_transitionstate(transitionstate=lowest_energy_ts,opt_type='overall')
+            result = self.calculate_transitionstate(transitionstate=lowest_energy_ts,opt_type='overall')
             
             if not result:
                 if shell_energies.shape[0] > 1:
@@ -1260,7 +1278,7 @@ class Job():
                     lowest_energy_label = "{}_{}_{}".format(
                     lowest_energy_ts.reaction_label, lowest_energy_ts.direction, lowest_energy_ts.index)
                     logging.info("Attempting overall optimization of {}".format(lowest_energy_label))
-                    result = calculate_transitionstate(transitionstate=lowest_energy_ts,opt_type='overall')
+                    result = self.calculate_transitionstate(transitionstate=lowest_energy_ts,opt_type='overall')
 
                     if not result:
                         if shell_energies.shape[0] > 2:
@@ -1269,7 +1287,7 @@ class Job():
                             lowest_energy_label = "{}_{}_{}".format(
                             lowest_energy_ts.reaction_label, lowest_energy_ts.direction, lowest_energy_ts.index)
                             logging.info("Attempting overall optimization of {}".format(lowest_energy_label))
-                            result = calculate_transitionstate(transitionstate=lowest_energy_ts,opt_type='overall')
+                            result = self.calculate_transitionstate(transitionstate=lowest_energy_ts,opt_type='overall')
 
             if result:
 
@@ -1313,10 +1331,28 @@ class Job():
                 transitionstate=transitionstate, directory=self.directory)
             validated = vib.validate_ts()
         if not validated:
+            try:
+                ts_forward = self.reaction.ts['forward'][0]
+                ts_reverse = self.reaction.ts['reverse'][0]
+                ts_forward.index = transitionstate.index
+                ts_reverse.index = transitionstate.index
+                ts_forward.direction = transitionstate.direction
+                ts_reverse.direction = transitionstate.direction
+                ts_list = [ts_forward,ts_reverse]
+                for ts in ts_list:
+                    vib = VibrationalAnalysis(
+                transitionstate=ts, directory=self.directory)
+                    validated = vib.validate_ts()
+                    if validated:
+                        logging.info("Validated via Vibrational Analysis")
+                        return True
+            except:
+                pass
+
             logging.info("Could not validate with Vibrational Analysis... Running an IRC to validate instead...")
             label = self.submit_transitionstate(
-                transitionstate, opt_type="irc")
-            time.sleep(5)
+                    transitionstate, opt_type="irc")
+            time.sleep(15)
             while not self.check_complete(label=label,user=self.discovery_username,partition=self.partition):
                 time.sleep(15)
             result = self.calculator.validate_irc()

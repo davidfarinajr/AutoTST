@@ -223,13 +223,25 @@ def systematic_search(conformer,
             opt.run()
         
         if type == 'ts':
-            result = False
-            reaction_center_labels = conformer.get_labels()[0]
-            reaction_center_forces = conformer.ase_molecule.get_forces()[reaction_center_labels]
-            max_reaction_center_force = np.sqrt((reaction_center_forces**2).sum(axis=1).max())
-            result = opt.run(fmax=0.5 * max_reaction_center_force)
-            if not result:
-                result = opt.run(fmax=max_reaction_center_force)
+            f_max = None
+            try:
+                # reaction_center_labels = conformer.get_labels()[0]
+                # reaction_center_forces = conformer.ase_molecule.get_forces()[reaction_center_labels]
+                # max_reaction_center_force = np.sqrt((reaction_center_forces**2).sum(axis=1).max())
+                # logging.info("The maximum reaction center force is {}".format(max_reaction_center_force))
+                # fmax = 0.10*max_reaction_center_force
+                # logging.info("Attempting to optimize with fmax of {}".format(fmax))
+                # opt.run(fmax=0.10*fmax)
+                opt.run(fmax=0.20, steps=1e6)
+            except RuntimeError:
+                logging.info("Optimization failed...we will use the unconverged geometry")
+                pass
+                # try:
+                #     logging.info("Initial opt failed...will try opt with fmax of 0.5")
+                #     opt.run(fmax=0.50)
+                # except RuntimeError:
+                #     logging.info("Optimizations failed to converge...single point energy will be used")
+                #     pass
             
         conformer.update_coords_from("ase")
         energy = get_energy(conformer)

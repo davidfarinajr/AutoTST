@@ -984,20 +984,32 @@ class TS(Conformer):
     def get_bonds(self):
         test_conf = Conformer()
         test_conf.rmg_molecule = self.rmg_molecule
-        test_conf.rdkit_molecule = self._pseudo_geometry
+        try:
+            test_conf.rdkit_molecule = self._pseudo_geometry
+        except:
+            self.get_rdkit_mol()
+            test_conf.rdkit_molecule = self._pseudo_geometry
         test_conf.ase_molecule = self.ase_molecule
         return test_conf.get_bonds()
 
     def get_torsions(self):
         test_conf = Conformer()
         test_conf.rmg_molecule = self.rmg_molecule
-        test_conf.rdkit_molecule = self._pseudo_geometry
+        try:
+            test_conf.rdkit_molecule = self._pseudo_geometry
+        except:
+            self.get_rdkit_mol()
+            test_conf.rdkit_molecule = self._pseudo_geometry
         test_conf.ase_molecule = self.ase_molecule
         return test_conf.get_torsions()
 
     def get_angles(self):
         test_conf = Conformer()
         test_conf.rmg_molecule = self.rmg_molecule
-        test_conf.rdkit_molecule = self._pseudo_geometry
+        try:
+            test_conf.rdkit_molecule = self._pseudo_geometry
+        except:
+            self.get_rdkit_mol()
+            test_conf.rdkit_molecule = self._pseudo_geometry
         test_conf.ase_molecule = self.ase_molecule
         return test_conf.get_angles()
