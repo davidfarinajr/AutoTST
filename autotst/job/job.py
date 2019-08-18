@@ -486,11 +486,11 @@ class Job():
             logging.info(
                 "Starting FOD calculation for {}".format(conformer))
             subprocess.Popen(
-                """sbatch --exclude=c5003,c3040 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p general -N 1 -n 4 -t 10:00 --mem=5GB $AUTOTST/autotst/job/orca_submit.sh""".format(
+                """sbatch --exclude=c5003,c3040 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p test -N 1 -n 4 -t 10:00 --mem=5GB $AUTOTST/autotst/job/orca_submit.sh""".format(
                     label), shell=True, cwd=orca_calc.directory)
             time.sleep(5)
         # wait unitl the job is done
-        while not self.check_complete(label=label, user=self.discovery_username, partition="general"):
+        while not self.check_complete(label=label, user=self.discovery_username, partition="test"):
             time.sleep(5)
 
         # If the log file exits, check to see if it terminated normally
@@ -595,9 +595,11 @@ class Job():
                 """sbatch {0} --exclude=c5003,c3040 --job-name="{1}" --output="{1}.log" --error="{1}.slurm.log" -p {2} -N 1 -n {3} -t {4} --mem={5} $AUTOTST/autotst/job/orca_submit.sh""".format(
                     exclusive,label,orca_calc.partition,orca_calc.nprocs,orca_calc.time,orca_calc.mem), shell=True, cwd=orca_calc.directory)  
             time.sleep(15)
-
-        while not self.check_complete(label=label, user=self.discovery_username, partition=orca_calc.partition):
-            time.sleep(15)
+            while not self.check_complete(label=label, user=self.discovery_username, partition=orca_calc.partition):
+                time.sleep(15)
+        
+        # while not self.check_complete(label=label, user=self.discovery_username, partition=orca_calc.partition):
+        #     time.sleep(15)
 
                 # If the log file exits, check to see if it terminated normally
         if os.path.exists(file_path + ".log"):
@@ -1016,6 +1018,48 @@ class Job():
             return False
         else:
             irc_logs = [l for l in os.listdir(irc_folder) if l.endswith('.log') and 'slurm' not in l]
+            irc_inputs = [l for l in os.listdir(irc_folder) if l.endswith('.com')]
+            if len(irc_logs) == 0:
+                if len(irc_inputs) == 0:
+                    logging.info('The irc folder contains no logs or inputs')
+                    return False
+                else:
+                    logging.info('There are no irc logs, but there are input files')
+                    for i in irc_inputs:
+                        direction = str(i.split('.com')[0].split('_')[-2])
+                        index = int(i.split('.com')[0].split('_')[-1])
+                        ts = reaction.ts[direction][0]
+                        ts.index = index
+                        self.calculator.conformer = ts
+                        ase_calculator = self.calculator.get_irc_calc()
+                        t = "24:00:00"
+                        label = ase_calculator.label
+                        scratch = ase_calculator.scratch
+                        file_path = os.path.join(scratch, label)
+
+                        os.environ['GAUSS_SCRDIR'] = '.'
+                        os.environ["COMMAND"] = "g16"  # only using gaussian for now
+                        os.environ["FILE_PATH"] = label
+                        attempted = False
+                        if os.path.exists(file_path + ".log"):
+                            attempted = True
+                            logging.info("It appears that {} has already been attempted...".format(label))
+
+                        if not self.check_complete(label=label, user=self.discovery_username, partition=self.partition):
+                            logging.info("It appears that {} is already in the queue...not submitting".format(label))
+                            attempted = True
+
+                        if not attempted:
+                            subprocess.Popen(
+                                """sbatch --exclude=c5003,c3040 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p {1} -N 1 -n 20 --mem=60GB -t {2} $AUTOTST/autotst/job/submit.sh""".format(
+                                    label, self.partition, t), shell=True, cwd=scratch)
+                            time.sleep(5)
+
+                        while not self.check_complete(label,user=self.discovery_username,partition=self.partition):
+                            time.sleep(15)
+                    
+                    irc_logs = [l for l in os.listdir(irc_folder) if l.endswith('.log') and 'slurm' not in l]
+                     
             for log in irc_logs:
                 if 'forward' in log:
                     direction = 'forward'
@@ -1045,6 +1089,7 @@ class Job():
                     logging.info(
                         "Could not validate {} from irc".format(label))
                     continue
+            
             if got_one:
                 return True
             else:
@@ -1154,8 +1199,8 @@ class Job():
                 else:
                     calculation_status[reaction] = False
                     logging.info(
-                        "We could not find an irc validated transition state :(")
-                    continue
+                        "We could not find an irc validated transition state ")
+                    pass
 
         #####################################
 
@@ -1259,7 +1304,7 @@ class Job():
             shell_energies.drop(drop_index,inplace=True)
             shell_energies.reset_index(inplace=True)
             
-            print shell_energies.values()
+            print shell_energies.values
 
             lowest_energy_file = shell_energies.file[0]
             lowest_energy_ts = shell_energies.transitionstate[0]
