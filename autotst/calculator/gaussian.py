@@ -46,11 +46,59 @@ from ase import Atom, Atoms
 from ase.io.gaussian import read_gaussian, read_gaussian_out
 from ase.calculators.gaussian import Gaussian as ASEGaussian
 
+from shutil import move
+
+def read_log(self, file_path=None):
+        """
+        A helper method that allows one to easily parse log files
+        """
+        symbol_dict = {
+            35: "Br",
+            17: "Cl",
+            9:  "F",
+            8:  "O",
+            7:  "N",
+            6:  "C",
+            1:  "H",
+        }
+        atoms = []
+
+        parser = ccread(file_path, loglevel=logging.ERROR)
+
+        for atom_num, coords in zip(parser.atomnos, parser.atomcoords[-1]):
+            atoms.append(Atom(symbol=symbol_dict[atom_num], position=coords))
+
+        return Atoms(atoms)
+
+def write_input(self, conformer, ase_calculator):
+        """
+        A helper method that will write an input file and move it to the correct scratch directory
+        """
+
+        ase_calculator.write_input(conformer.ase_molecule)
+        try:
+            os.makedirs(ase_calculator.scratch)
+        except OSError:
+            pass
+
+        move(
+            ase_calculator.label + ".com",
+            os.path.join(
+                ase_calculator.scratch,
+                ase_calculator.label + ".com"
+            ))
+
+        move(
+            ase_calculator.label + ".ase",
+            os.path.join(
+                ase_calculator.scratch,
+                ase_calculator.label + ".ase"
+            ))
 
 class Gaussian():
 
     def __init__(self,
-                 conformer=None, # Either a transition state or a conformer
+                 conformer= None, # Either a transition state or a conformer
                  settings={
                      "method": "m062x",
                      "basis": "cc-pVTZ",
@@ -183,7 +231,7 @@ class Gaussian():
         del ase_gaussian.parameters['force']
         return ase_gaussian
 
-    def get_conformer_calc(self):
+    def get_conformer_calc(self, method = 'm062x', basis_set = 'cc-pvtz', convergence = '', dispersion=''):
         """
         A method that creates a calculator for a `Conformer` that will perform a geometry optimization
 
@@ -198,6 +246,17 @@ class Gaussian():
         - calc (ASEGaussian): an ASEGaussian calculator with all of the proper setting specified
         """
 
+        method = method.upper()
+        basis_set = basis_set.upper()
+        dispersion = dispersion.upper()
+        
+        assert dispersion in ['GD3','GD3BJ','GD2',''],'Acceptable keywords for dispersion are GD3, GD3BJ, or GD2'
+        if dispersion == '':
+            method_name = method + '_' + basis_set
+        else:
+            method_name = method + '-' + dispersion + '_' + basis_set
+        
+        dispersion = 'EmpiricalDispersion={}'.format(dispersion)
 
         if isinstance(self.conformer, TS):
             logging.info(
@@ -209,30 +268,34 @@ class Gaussian():
 
         self.conformer.rmg_molecule.updateMultiplicity()
 
-        label = "{}_{}".format(self.conformer.smiles, self.conformer.index)
+        label = "{}_{}_{}_optfreq".format(self.conformer.smiles, self.conformer.index, method_name)
 
         new_scratch = os.path.join(
             self.directory,
             "species",
+            method_name.
             self.conformer.smiles,
             "conformers"
         )
+        
 
         try:
             os.makedirs(new_scratch)
         except OSError:
             pass
 
+       
         ase_gaussian = ASEGaussian(
             mem=self.settings["mem"],
             nprocshared=self.settings["nprocshared"],
             label=label,
             scratch=new_scratch,
-            method=self.settings["method"],
-            basis=self.settings["basis"],
-            extra="opt=(calcfc,maxcycles=900,{}) freq IOP(7/33=1,2/16=3) scf=(maxcycle=900)".format(self.convergence),
+            method=method,
+            basis=basis_set,
+            extra="opt=(calcfc,maxcycles=900,{}) {} freq IOP(7/33=1,2/16=3) scf=(maxcycle=900)".format(convergence,dispersion),
             multiplicity=self.conformer.rmg_molecule.multiplicity)
         ase_gaussian.atoms = self.conformer.ase_molecule
+        ase_gaussian.directory = new_scratch
         del ase_gaussian.parameters['force']
         return ase_gaussian
 
