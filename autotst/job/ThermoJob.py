@@ -723,18 +723,19 @@ class ThermoJob():
                 logging.info('Could not perform single point calcs because single point calculator provided is not currently supported')
 
         ##### run Arkane
+        smiles = self.species.smiles[0]
         arkane_dir = os.path.join(
             self.directory,
             "species",
             method_name,
-            self.species.smiles[0],
+            smiles,
             'arkane'
         )
         if not os.path.exists(arkane_dir):
             os.makedirs(arkane_dir)
 
-        label =  "{}_{}_optfreq".format(self.species.smiles[0],method_name)
-        log_path = os.path.join(self.directory,"species",method_name,self.species.smiles[0],label+".log")
+        label =  "{}_{}_optfreq".format(smiles,method_name)
+        log_path = os.path.join(self.directory,"species",method_name,smiles,label+".log")
         molecule = self.species.rmg_species[0]
         arkane_calc = Arkane_Input(molecule=molecule,modelChemistry=method_name,directory=arkane_dir,gaussian_log_path=log_path)
         arkane_calc.write_molecule_file()
@@ -751,12 +752,30 @@ class ThermoJob():
             self.directory,
             "species",
             method_name,
-            self.species.smiles[0],
-            self.species.smiles[0] + '.yml'
+            smiles,
+            smiles + '.yml'
         )
+
+    
+        dest2 = os.path.expandvars(os.path.join('$halogen_data','reference_species',method_name))
+        if not os.path.exists(dest2):
+            os.makedirs(dest2)
 
         if os.path.exists(yml_file):
             copyfile(yml_file,dest)
+            copyfile(yml_file,os.path.join(dest2,smiles + '.yml'))
+            copyfile(
+                os.path.join(self.directory,"species",method_name,smiles,smiles + '_fod.log'),
+                os.path.join(dest2,smiles + '_fod.log')
+            )  
+            copyfile(
+                os.path.join(self.directory,"species",method_name,smiles,smiles + '_' + method_name + '_optfreq.log'),
+                os.path.join(dest2,smiles + '_' + method_name + '_optfreq.log')
+            )
+            copyfile(
+                os.path.join(self.directory,"species",method_name,smiles,'arkane',smiles+'.py'),
+                os.path.join(dest2,smiles + '.py')
+            )
             logging.info('Arkane job completed successfully!')
 
         else:
