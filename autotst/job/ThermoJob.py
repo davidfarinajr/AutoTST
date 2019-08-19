@@ -1,4 +1,4 @@
-from autotst.calculator.gaussian import read_log,write_input, Gaussian
+from autotst.calculator.gaussian import read_log,write_input,Gaussian
 from autotst.calculator.orca import Orca
 from autotst.calculator.arkane_input import Arkane_Input
 from autotst.species import Species, Conformer
@@ -7,9 +7,6 @@ import cclib
 from cclib.io import ccread
 from rmgpy.molecule import Molecule as RMGMolecule
 from rmgpy.species import Species as RMGSpecies
-from rmgpy.reaction import Reaction as RMGReaction, ReactionError
-from rmgpy.kinetics import PDepArrhenius, PDepKineticsModel
-from rmgpy.data.rmg import RMGDatabase
 import rmgpy
 from ase.calculators.gaussian import Gaussian as ASEGaussian
 from ase.atoms import Atom, Atoms
@@ -82,7 +79,6 @@ def check_isomorphic(conformer,log_path):
         logging.info(
         "{} was successful and was validated!".format(log_path))
         return True
-
 
 class ThermoJob():
     """
@@ -484,7 +480,7 @@ class ThermoJob():
         2) Optimizes each low energy conformer with provided Gaussian AutoTST calculator.
         3) Saves the gaussian optimization and frequency analysis log file for the lowest energy conformer of the species.
         """
-
+        species = self.species
         method = method.upper()
         basis_set = basis_set.upper()
         dispersion = dispersion.upper()
