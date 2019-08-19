@@ -48,7 +48,7 @@ from ase.calculators.gaussian import Gaussian as ASEGaussian
 
 from shutil import move
 
-def read_log(self, file_path=None):
+def read_log(file_path=None):
         """
         A helper method that allows one to easily parse log files
         """
@@ -70,7 +70,7 @@ def read_log(self, file_path=None):
 
         return Atoms(atoms)
 
-def write_input(self, conformer, ase_calculator):
+def write_input(conformer, ase_calculator):
         """
         A helper method that will write an input file and move it to the correct scratch directory
         """
