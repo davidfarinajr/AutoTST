@@ -196,7 +196,7 @@ class ThermoJob():
                 logging.info("Starting calculations for {}".format(conformer))
             subprocess.Popen(
                 """sbatch --exclude=c5003,c3040 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p {1} -N 1 -n 20 -t 12:00:00 --mem=60GB $AUTOTST/autotst/job/submit.sh""".format(
-                    label, self.partition), shell=True, cwd=ase_calc.scratch)
+                    label, self.partition), shell=True, cwd=calc.scratch)
 
         return label
 
