@@ -273,7 +273,7 @@ class Gaussian():
         new_scratch = os.path.join(
             self.directory,
             "species",
-            method_name
+            method_name,
             self.conformer.smiles,
             "conformers"
         )
