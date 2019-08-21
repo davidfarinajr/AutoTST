@@ -102,7 +102,7 @@ class Gaussian():
                  settings={
                      "method": "m062x",
                      "basis": "cc-pVTZ",
-                     "mem": "5GB",
+                     "mem": "50GB",
                      "nprocshared": 20,
                  },
                  convergence="",
@@ -113,7 +113,7 @@ class Gaussian():
         default_settings = {
             "method": "m062x",
             "basis": "cc-pVTZ",
-            "mem": "5GB",
+            "mem": "50GB",
             "nprocshared": 20,
         }
 

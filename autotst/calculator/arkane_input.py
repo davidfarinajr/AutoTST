@@ -42,7 +42,7 @@ logging.basicConfig(format=FORMAT, level=logging.INFO)
 
 class Arkane_Input():
 
-    def init(self, molecule=None, modelChemistry=None, directory=None, gaussian_log_path=None, energy_log_path=None, geometry_log_path=None, frequencies_log_path=None):
+    def __init__(self, molecule=None, modelChemistry=None, directory=None, gaussian_log_path=None, energy_log_path=None, geometry_log_path=None, frequencies_log_path=None):
         
         self.molecule = molecule
         self.modelChemistry = modelChemistry
@@ -66,7 +66,8 @@ class Arkane_Input():
         linear = self.molecule.isLinear()
         sym_num = self.molecule.calculateSymmetryNumber()
         mult = self.molecule.multiplicity
-        path = os.path.join(self.directory,smiles+'.py')
+        path = os.path.join(self.directory,self.smiles+'.py')
+        gaussian_path = os.path.basename(self.energy_log_path)
 
         with open(path,'w+') as f:
             f.write('#SMILES = {}\n'.format(self.smiles))
@@ -74,9 +75,9 @@ class Arkane_Input():
             f.write('externalSymmetry = {}\n'.format(sym_num))
             f.write('spinMultiplicity = {}\n'.format(mult))
             f.write('opticalIsomers = 1\n')
-            f.write('geometry = GaussianLog("{}")\n'.format(self.energy_log_path))
-            f.write('frequencies = GaussianLog("{}")\n'.format(self.geometry_log_path))
-            f.write('energy = GaussianLog("{}")\n'.format(self.frequencies_log_path))
+            f.write('geometry = GaussianLog("{}")\n'.format(gaussian_path))
+            f.write('frequencies = GaussianLog("{}")\n'.format(gaussian_path))
+            f.write('energy = GaussianLog("{}")\n'.format(gaussian_path))
             f.close()
 
         return path
