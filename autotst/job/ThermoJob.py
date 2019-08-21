@@ -281,7 +281,7 @@ class ThermoJob():
 
             label = self._submit_conformer(conformer,calc)
             time.sleep(10)
-            while not check_complete(label=label,user=self.discovery_username,partition=calc.parameters{"partition"}):
+            while not check_complete(label=label,user=self.discovery_username,partition=calc.parameters["partition"]):
                 time.sleep(15)
 
             if not os.path.exists(log_path):
