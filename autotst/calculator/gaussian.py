@@ -102,8 +102,10 @@ class Gaussian():
                  settings={
                      "method": "m062x",
                      "basis": "cc-pVTZ",
-                     "mem": "50GB",
+                     "mem": "5GB",
                      "nprocshared": 20,
+                     "time": "12:00:00",
+                     "partition": 'general'
                  },
                  convergence="",
                  directory=".", #where you want input and log files to be written, default is current directory
@@ -249,7 +251,23 @@ class Gaussian():
         method = method.upper()
         basis_set = basis_set.upper()
         dispersion = dispersion.upper()
+
+        self.settings["mem"] = '2GB'
+        num_atoms = self.conformer.rmg_molecule.getNumAtoms()
         
+        if num_atoms <= 4:
+            self.settings["nprocshared"] = 1
+            self.settings["time"] = '03:00:00'
+        elif (num_atoms > 4) and (num_atoms <= 8):
+            self.settings["nprocshared"] = 2
+            self.settings["time"] = '06:00:00'
+        elif (num_atoms > 8) and (num_atoms <= 15):
+            self.settings["nprocshared"] = 4
+            self.settings["time"] = '08:00:00'
+        else:
+            self.settings["nprocshared"] = 6
+            self.settings["time"] = '12:00:00'
+
         assert dispersion in ['GD3','GD3BJ','GD2',''],'Acceptable keywords for dispersion are GD3, GD3BJ, or GD2'
         if dispersion == '':
             method_name = method + '_' + basis_set
