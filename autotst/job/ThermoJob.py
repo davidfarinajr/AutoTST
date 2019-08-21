@@ -195,7 +195,7 @@ class ThermoJob():
             else:
                 logging.info("Starting calculations for {}".format(conformer))
             subprocess.Popen(
-                """sbatch --exclude=c5003,c3040 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p {1} -N 1 -n 20 -t 12:00:00 --mem=60GB $AUTOTST/autotst/job/submit.sh""".format(
+                """sbatch --exclude=c5003,c3040 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p {1} -N 1 -n 20 -t 8:00:00 --mem=60GB $AUTOTST/autotst/job/submit.sh""".format(
                     label, self.partition), shell=True, cwd=calc.scratch)
 
         return label
@@ -356,11 +356,11 @@ class ThermoJob():
             logging.info(
                 "Starting FOD calculation for {}".format(conformer))
             subprocess.Popen(
-                """sbatch --exclude=c5003,c3040 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p general -N 1 -n 4 -t 10:00 --mem=5GB $AUTOTST/autotst/job/orca_submit.sh""".format(
+                """sbatch --exclude=c5003,c3040 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p test -N 1 -n 4 -t 10:00 --mem=5GB $AUTOTST/autotst/job/orca_submit.sh""".format(
                     label), shell=True, cwd=orca_calc.directory)
-            time.sleep(60)
+            time.sleep(10)
         # wait unitl the job is done
-        while not check_complete(label=label, user=self.discovery_username, partition="general"):
+        while not check_complete(label=label, user=self.discovery_username, partition="test"):
             time.sleep(10)
 
         # If the log file exits, check to see if it terminated normally
@@ -492,7 +492,7 @@ class ThermoJob():
 
         got_one = False
         label =  "{}_{}_optfreq".format(self.species.smiles[0],method_name)
-        log_path = os.path.join(self.calculator.directory,"species",self.species.smiles[0],label+".log")
+        log_path = os.path.join(self.calculator.directory,"species",method_name,self.species.smiles[0],label+".log")
         if os.path.exists(log_path) and not recalculate:
             logging.info('It appears we already calculated this species')
             logging.info('Checking to see if the log is complete and converge...')
@@ -554,9 +554,9 @@ class ThermoJob():
             for smiles, conformers in list(species.conformers.items()):
                 for conformer in conformers:
                     scratch_dir = os.path.join(
-                        self.calculator.directory,
-                        method_name,
+                        self.directory,
                         "species",
+                        method_name,
                         conformer.smiles,
                         "conformers"
                     )
@@ -599,9 +599,9 @@ class ThermoJob():
             logging.info(
                 "The lowest energy conformer is {}".format(lowest_energy_file))
 
-            lowest_energy_file_path = os.path.join(self.calculator.directory, method_name, "species",conformer.smiles,"conformers",lowest_energy_file)
+            lowest_energy_file_path = os.path.join(self.calculator.directory, "species",method_name, conformer.smiles,"conformers",lowest_energy_file)
             label =  "{}_{}_optfreq".format(conformer.smiles,method_name)
-            dest = os.path.join(self.calculator.directory,method_name, "species",conformer.smiles,label+".log")
+            dest = os.path.join(self.calculator.directory,"species",method_name,conformer.smiles,label+".log")
 
             try:
                 copyfile(lowest_energy_file_path,dest)
@@ -613,7 +613,7 @@ class ThermoJob():
                 lowest_energy_file))
 
             parser = ccread(dest, loglevel=logging.ERROR)
-            xyzpath = os.path.join(self.calculator.directory,method_name,"species",conformer.smiles,label+".xyz")
+            xyzpath = os.path.join(self.calculator.directory,"species",method_name,conformer.smiles,label+".xyz")
             parser.writexyz(xyzpath)
 
             logging.info("The lowest energy xyz file is {}!".format(
@@ -623,9 +623,9 @@ class ThermoJob():
 
             # Update the lowest energy conformer 
             # with the lowest energy logfile
-            label =  "{}_{}_{}".format(self.species.smiles[0],method_name,basis_set)
+            label =  "{}_{}".format(self.species.smiles[0],method_name,basis_set)
             conformer = Conformer(smiles=species.smiles[0])
-            log = os.path.join(self.calculator.directory,method_name,"species",conformer.smiles,label+".log")
+            log = os.path.join(self.calculator.directory,"species",method_name,conformer.smiles,label+"_optfreq.log")
             assert os.path.exists(log),"It appears the calculation failed for {}...cannot calculate fod".format(conformer.smiles)
             atoms = read_log(log)
             conformer.ase_molecule = atoms
@@ -672,7 +672,7 @@ class ThermoJob():
                 t = '1-00:00:00'
                 partition = 'general'        
 
-            sp_dir = os.path.join(self.directory,method_name,"species",conformer.smiles,"sp")
+            sp_dir = os.path.join(self.directory,"species",method_name,conformer.smiles,"sp")
             if not os.path.exists(sp_dir):
                 os.makedirs(sp_dir)
             if self.sp_calculator is None:
@@ -730,20 +730,23 @@ class ThermoJob():
         if not os.path.exists(arkane_dir):
             os.makedirs(arkane_dir)
 
+
         label =  "{}_{}_optfreq".format(smiles,method_name)
         log_path = os.path.join(self.directory,"species",method_name,smiles,label+".log")
+        copyfile(log_path,os.path.join(arkane_dir,label + ".log"))
         molecule = self.species.rmg_species[0]
         arkane_calc = Arkane_Input(molecule=molecule,modelChemistry=method_name,directory=arkane_dir,gaussian_log_path=log_path)
         arkane_calc.write_molecule_file()
         arkane_calc.write_arkane_input()
         subprocess.Popen(
-                """sbatch --exclude=c5003,c3040 --job-name="{}" --output="{}.log" --error="{}.slurm.log" -p general -N 1 -n 1 -t 10:00 --mem=1GB $RMGpy/Arkane.py arkane_input.py""".format(
-                    arkane_calc.label), shell=True, cwd=arkane_calc.directory)
+            """sbatch --exclude=c5003,c3040 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p test -N 1 -n 1 -t 10:00 --mem=1GB $RMGpy/Arkane.py arkane_input.py""".format(arkane_calc.label), 
+            shell=True, cwd=arkane_calc.directory)
         time.sleep(15)
-        while not check_complete(label=arkane_calc.label, user=self.discovery_username, partition='general'):
+        while not check_complete(label=arkane_calc.label, user=self.discovery_username, partition='test'):
             time.sleep(10)
 
         yml_file = os.path.join(arkane_calc.directory,'species','1.yml')
+        os.remove(os.path.join(arkane_dir,label + ".log"))
         dest = os.path.join(
             self.directory,
             "species",

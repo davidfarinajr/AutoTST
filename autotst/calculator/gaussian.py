@@ -102,8 +102,8 @@ class Gaussian():
                  settings={
                      "method": "m062x",
                      "basis": "cc-pVTZ",
-                     "mem": "5GB",
-                     "nprocshared": 24,
+                     "mem": "50GB",
+                     "nprocshared": 20,
                  },
                  convergence="",
                  directory=".", #where you want input and log files to be written, default is current directory
@@ -113,8 +113,8 @@ class Gaussian():
         default_settings = {
             "method": "m062x",
             "basis": "cc-pVTZ",
-            "mem": "5GB",
-            "nprocshared": 24,
+            "mem": "50GB",
+            "nprocshared": 20,
         }
 
         self.conformer = conformer
