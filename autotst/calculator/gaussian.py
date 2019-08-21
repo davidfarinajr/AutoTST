@@ -115,7 +115,7 @@ class Gaussian():
         default_settings = {
             "method": "m062x",
             "basis": "cc-pVTZ",
-            "mem": "50GB",
+            "mem": "5GB",
             "nprocshared": 20,
         }
 
@@ -258,10 +258,10 @@ class Gaussian():
         if num_atoms <= 4:
             self.settings["nprocshared"] = 1
             self.settings["time"] = '03:00:00'
-        elif (num_atoms > 4) and (num_atoms <= 8):
+        elif num_atoms <= 8:
             self.settings["nprocshared"] = 2
             self.settings["time"] = '06:00:00'
-        elif (num_atoms > 8) and (num_atoms <= 15):
+        elif num_atoms <= 15:
             self.settings["nprocshared"] = 4
             self.settings["time"] = '08:00:00'
         else:
@@ -313,6 +313,8 @@ class Gaussian():
             multiplicity=self.conformer.rmg_molecule.multiplicity)
         ase_gaussian.atoms = self.conformer.ase_molecule
         ase_gaussian.directory = new_scratch
+        ase_gaussian.parameters["partition"] = self.settings["partition"]
+        ase_gaussian.parameters["time"] = self.settings["time"]
         del ase_gaussian.parameters['force']
         return ase_gaussian
 

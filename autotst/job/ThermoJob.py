@@ -196,7 +196,7 @@ class ThermoJob():
                 logging.info("Starting calculations for {}".format(conformer))
             subprocess.Popen(
                 """sbatch --exclude=c5003,c3040 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p {1} -N 1 -n {2} -t {3} --mem={4} $AUTOTST/autotst/job/submit.sh""".format(
-                    label,calc.settings["partition"],calc.settings["nprocshared"],calc.settings["time"],calc.settings["mem"]), shell=True, cwd=calc.scratch)
+                    label,calc.parameters["partition"],calc.parameters["nprocshared"],calc.parameters["time"],calc.parameters["mem"]), shell=True, cwd=calc.scratch)
 
         return label
 
@@ -225,7 +225,7 @@ class ThermoJob():
             "Submitting conformer calculation for {}".format(calc.label))
         label = self._submit_conformer(conformer,calc)
         time.sleep(15)
-        while not check_complete(label=label,user=self.discovery_username,partition=calc.settings["partition"]):
+        while not check_complete(label=label,user=self.discovery_username,partition=calc.parameters["partition"]):
             time.sleep(15)
 
         complete, converged = self.calculator.verify_output_file(log_path)
@@ -233,11 +233,11 @@ class ThermoJob():
         if not complete:
             logging.info(
                 "It seems that the file never completed for {} completed, running it again".format(calc.label))
-            calc.settings["time"] = "12:00:00"
-            calc.settings["nprocshared"] = 12
+            calc.parameters["time"] = "12:00:00"
+            calc.parameters["nprocshared"] = 12
             label = self._submit_conformer(conformer,calc,restart=True)
             time.sleep(10)
-            while not check_complete(label=label,user=self.discovery_username,partition=calc.settings["partition"]):
+            while not check_complete(label=label,user=self.discovery_username,partition=calc.parameters["partition"]):
                 time.sleep(15)
 
             complete, converged = self.calculator.verify_output_file(log_path)
@@ -250,11 +250,11 @@ class ThermoJob():
         if not complete: # try again
             logging.info(
                 "It appears that {} was killed prematurely".format(calc.label))
-            calc.settings["time"] = "12:00:00"
-            calc.settings["nprocshared"] = 12
+            calc.parameters["time"] = "12:00:00"
+            calc.parameters["nprocshared"] = 12
             label = self._submit_conformer(conformer,calc, restart=True)
             time.sleep(10)
-            while not check_complete(label=label,user=self.discovery_username,partition=calc.settings["partition"]):
+            while not check_complete(label=label,user=self.discovery_username,partition=calc.parameters["partition"]):
                 time.sleep(15)
 
             complete, converged = self.calculator.verify_output_file(log_path)
@@ -281,7 +281,7 @@ class ThermoJob():
 
             label = self._submit_conformer(conformer,calc)
             time.sleep(10)
-            while not check_complete(label=label,user=self.discovery_username,partition=self.partition):
+            while not check_complete(label=label,user=self.discovery_username,partition=calc.parameters{"partition"}):
                 time.sleep(15)
 
             if not os.path.exists(log_path):
