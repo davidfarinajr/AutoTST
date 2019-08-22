@@ -496,8 +496,8 @@ class ThermoJob():
 
         for smiles in self.species.smiles:
             got_one = False
-            label =  "{}_{}_optfreq".format(self.species.smiles[0],method_name)
-            log_path = os.path.join(self.calculator.directory,"species",method_name,self.species.smiles[0],label+".log")
+            label =  "{}_{}_optfreq".format(smiles,method_name)
+            log_path = os.path.join(self.calculator.directory,"species",method_name,smiles,label+".log")
             if os.path.exists(log_path) and not recalculate:
                 logging.info('It appears we already calculated this species')
                 logging.info('Checking to see if the log is complete and converge...')
@@ -505,7 +505,7 @@ class ThermoJob():
                 
                 if (complete and converged):
                     logging.info('creating a sample conformer for isomorphism test...')
-                    conf = Conformer(smiles=species.smiles[0])
+                    conf = Conformer(smiles=smiles)
                     if check_isomorphic(conformer=conf, log_path=log_path):
                         got_one = True
                         logging.info('The existing log has been verified')
@@ -738,7 +738,6 @@ class ThermoJob():
             )
             if not os.path.exists(arkane_dir):
                 os.makedirs(arkane_dir)
-
 
             label =  "{}_{}_optfreq".format(smiles,method_name)
             log_path = os.path.join(self.directory,"species",method_name,smiles,label+".log")
