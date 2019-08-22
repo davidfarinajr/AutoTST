@@ -529,7 +529,7 @@ class ThermoJob():
                 #for smiles, conformers in list(species.conformers.items()):
                 #for conformers in list(species.conformers[smiles]):
 
-                for conformer in species.conformers[smiles]:
+                for conformer in list(species.conformers[smiles]):
 
                     process = Process(target=self.calculate_conformer, args=(
                         conformer,method,basis_set,dispersion))
@@ -559,7 +559,7 @@ class ThermoJob():
                 results = []
                 #for smiles, conformers in list(species.conformers.items()):
                 #for conformers in species.conformers[smiles]:
-                for conformer in species.conformers[smiles]:
+                for conformer in list(species.conformers[smiles]):
                     scratch_dir = os.path.join(
                         self.directory,
                         "species",
@@ -791,7 +791,7 @@ class ThermoJob():
                 logging.info('Arkane job completed successfully!')
 
             else:
-                logging.info('It appears the arkane job failed or was never run')
+                logging.info('It appears the arkane job failed or was never run for {}'.format(smiles))
 
 
 
