@@ -527,13 +527,13 @@ class ThermoJob():
                 currently_running = []
                 processes = {}
                 #for smiles, conformers in list(species.conformers.items()):
-                for conformers in species.conformers[smiles]:
+                #for conformers in list(species.conformers[smiles]):
 
-                    for conformer in conformers:
+                for conformer in species.conformers[smiles]:
 
-                        process = Process(target=self.calculate_conformer, args=(
-                            conformer,method,basis_set,dispersion))
-                        processes[process.name] = process
+                    process = Process(target=self.calculate_conformer, args=(
+                        conformer,method,basis_set,dispersion))
+                    processes[process.name] = process
 
                 # This loop will block until everything in processes 
                 # has been started, and added to currently_running
@@ -558,34 +558,34 @@ class ThermoJob():
 
                 results = []
                 #for smiles, conformers in list(species.conformers.items()):
-                for conformers in species.conformers[smiles]:
-                    for conformer in conformers:
-                        scratch_dir = os.path.join(
-                            self.directory,
-                            "species",
-                            method_name,
-                            conformer.smiles,
-                            "conformers"
-                        )
-                        f = "{}_{}_{}_optfreq.log".format(conformer.smiles, conformer.index, method_name)
-                        path = os.path.join(scratch_dir, f)
-                        if not os.path.exists(path):
+                #for conformers in species.conformers[smiles]:
+                for conformer in species.conformers[smiles]:
+                    scratch_dir = os.path.join(
+                        self.directory,
+                        "species",
+                        method_name,
+                        conformer.smiles,
+                        "conformers"
+                    )
+                    f = "{}_{}_{}_optfreq.log".format(conformer.smiles, conformer.index, method_name)
+                    path = os.path.join(scratch_dir, f)
+                    if not os.path.exists(path):
+                        logging.info(
+                            "It seems that {} was never run...".format(f))
+                        continue
+                    try:
+                        parser = ccread(path, loglevel=logging.ERROR)
+                        if parser is None:
                             logging.info(
-                                "It seems that {} was never run...".format(f))
+                                "Something went wrong when reading in results for {} using cclib...".format(f))
                             continue
-                        try:
-                            parser = ccread(path, loglevel=logging.ERROR)
-                            if parser is None:
-                                logging.info(
-                                    "Something went wrong when reading in results for {} using cclib...".format(f))
-                                continue
-                            energy = parser.scfenergies[-1]
-                        except:
-                            logging.info(
-                                "The parser does not have an scf energies attribute, we are not considering {}".format(f))
-                            energy = 1e5
+                        energy = parser.scfenergies[-1]
+                    except:
+                        logging.info(
+                            "The parser does not have an scf energies attribute, we are not considering {}".format(f))
+                        energy = 1e5
 
-                        results.append([energy, conformer, f])
+                    results.append([energy, conformer, f])
 
                 results = pd.DataFrame(
                     results, columns=["energy", "conformer", "file"]).sort_values("energy").reset_index()
