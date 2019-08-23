@@ -233,7 +233,7 @@ class Gaussian():
         del ase_gaussian.parameters['force']
         return ase_gaussian
 
-    def get_conformer_calc(self, method = 'm062x', basis_set = 'cc-pvtz', convergence = '', dispersion=''):
+    def get_conformer_calc(self, method = 'm062x', basis_set = 'cc-pvtz', convergence = '', dispersion=None):
         """
         A method that creates a calculator for a `Conformer` that will perform a geometry optimization
 
@@ -271,14 +271,13 @@ class Gaussian():
             self.settings["nprocshared"] = 12
             self.settings["time"] = '24:00:00'
 
-        assert dispersion in ['GD3','GD3BJ','GD2',''],'Acceptable keywords for dispersion are GD3, GD3BJ, or GD2'
-        if dispersion == '':
-            method_name = method + '_' + basis_set
-        else:
+        if dispersion:
+            assert dispersion in ['GD3','GD3BJ','GD2'],'Acceptable keywords for dispersion are GD3, GD3BJ, or GD2'
             method_name = method + '-' + dispersion + '_' + basis_set
+            dispersion = 'EmpiricalDispersion={}'.format(dispersion)
+        else dispersion:
+            method_name = method + '_' + basis_set
         
-        dispersion = 'EmpiricalDispersion={}'.format(dispersion)
-
         if isinstance(self.conformer, TS):
             logging.info(
                 "TS object provided, cannot obtain a species calculator for a TS")
