@@ -275,7 +275,7 @@ class Gaussian():
             assert dispersion in ['GD3','GD3BJ','GD2'],'Acceptable keywords for dispersion are GD3, GD3BJ, or GD2'
             method_name = method + '-' + dispersion + '_' + basis_set
             dispersion = 'EmpiricalDispersion={}'.format(dispersion)
-        else dispersion:
+        else:
             method_name = method + '_' + basis_set
         
         if isinstance(self.conformer, TS):
