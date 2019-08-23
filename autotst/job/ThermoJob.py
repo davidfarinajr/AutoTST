@@ -528,23 +528,22 @@ class ThermoJob():
                 processes = {}
                 #for smiles, conformers in list(species.conformers.items()):
                 #for conformers in list(species.conformers[smiles]):
-
-                for conformer in list(species.conformers[smiles]):
-
+                
+                for conformer in species.conformers[smiles]:
                     process = Process(target=self.calculate_conformer, args=(
                         conformer,method,basis_set,dispersion))
                     processes[process.name] = process
 
                 # This loop will block until everything in processes 
                 # has been started, and added to currently_running
-                # for name, process in list(processes.items()):
-                #     while len(currently_running) >= 50:
-                #         for running in currently_running:
-                #             if not running.is_alive():
-                #                 currently_running.remove(name)
-                #         time.sleep(15)
-                #     process.start()
-                #     currently_running.append(name)
+                for name, process in list(processes.items()):
+                    # while len(currently_running) >= 50:
+                    #     for running in currently_running:
+                    #         if not running.is_alive():
+                    #             currently_running.remove(name)
+                    #     time.sleep(15)
+                    process.start()
+                    currently_running.append(name)
 
                 # This loop will block until everything in currently_running
                 # has finished.
