@@ -476,7 +476,7 @@ class ThermoJob():
             logging.info("It appears the single point calculation {} never ran".format(label))
             return False
 
-    def calculate_species(self, method = 'm062x', basis_set = 'cc-pvtz', dispersion= '',
+    def calculate_species(self, method = 'm062x', basis_set = 'cc-pvtz', dispersion= None,
                           recalculate=False, calculate_fod=False, single_point=False):
         """
         Calculates the energy and harmonic frequencies of the lowest energy conformer of a species:
@@ -489,10 +489,10 @@ class ThermoJob():
         basis_set = basis_set.upper()
         dispersion = dispersion.upper()
 
-        if dispersion == '':
-            method_name = method + '_' + basis_set
-        else:
+        if dispersion:
             method_name = method + '-' + dispersion + '_' + basis_set
+        else:
+            method_name = method + '_' + basis_set
 
         for smiles in self.species.smiles:
             got_one = False
@@ -540,7 +540,7 @@ class ThermoJob():
                 for name, process in list(processes.items()):
                     while len(currently_running) >= 50:
                         for running in currently_running:
-                            if not running.is_alive():
+                            if not process.is_alive():
                                 currently_running.remove(name)
                         time.sleep(15)
                     process.start()
