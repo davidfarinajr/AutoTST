@@ -250,7 +250,6 @@ class Gaussian():
 
         method = method.upper()
         basis_set = basis_set.upper()
-        dispersion = dispersion.upper()
 
         self.settings["mem"] = '2GB'
         num_atoms = self.conformer.rmg_molecule.getNumAtoms()
@@ -272,6 +271,7 @@ class Gaussian():
             self.settings["time"] = '24:00:00'
 
         if dispersion:
+            dispersion = dispersion.upper()
             assert dispersion in ['GD3','GD3BJ','GD2'],'Acceptable keywords for dispersion are GD3, GD3BJ, or GD2'
             method_name = method + '-' + dispersion + '_' + basis_set
             dispersion = 'EmpiricalDispersion={}'.format(dispersion)

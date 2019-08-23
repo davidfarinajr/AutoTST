@@ -487,9 +487,9 @@ class ThermoJob():
         species = self.species
         method = method.upper()
         basis_set = basis_set.upper()
-        dispersion = dispersion.upper()
 
         if dispersion:
+            dispersion = dispersion.upper()
             method_name = method + '-' + dispersion + '_' + basis_set
         else:
             method_name = method + '_' + basis_set
