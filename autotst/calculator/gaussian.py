@@ -276,6 +276,7 @@ class Gaussian():
             method_name = method + '-' + dispersion + '_' + basis_set
             dispersion = 'EmpiricalDispersion={}'.format(dispersion)
         else:
+            dispersion = ''
             method_name = method + '_' + basis_set
         
         if isinstance(self.conformer, TS):
