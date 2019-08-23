@@ -250,8 +250,8 @@ class ThermoJob():
         if not complete: # try again
             logging.info(
                 "It appears that {} was killed prematurely".format(calc.label))
-            calc.parameters["time"] = "12:00:00"
-            calc.parameters["nprocshared"] = 12
+            calc.parameters["time"] = "24:00:00"
+            calc.parameters["nprocshared"] = 16
             label = self._submit_conformer(conformer,calc, restart=True)
             time.sleep(10)
             while not check_complete(label=label,user=self.discovery_username,partition=calc.parameters["partition"]):
@@ -537,14 +537,14 @@ class ThermoJob():
 
                 # This loop will block until everything in processes 
                 # has been started, and added to currently_running
-                for name, process in list(processes.items()):
-                    while len(currently_running) >= 50:
-                        for running in currently_running:
-                            if not running.is_alive():
-                                currently_running.remove(name)
-                        time.sleep(15)
-                    process.start()
-                    currently_running.append(name)
+                # for name, process in list(processes.items()):
+                #     while len(currently_running) >= 50:
+                #         for running in currently_running:
+                #             if not running.is_alive():
+                #                 currently_running.remove(name)
+                #         time.sleep(15)
+                #     process.start()
+                #     currently_running.append(name)
 
                 # This loop will block until everything in currently_running
                 # has finished.
