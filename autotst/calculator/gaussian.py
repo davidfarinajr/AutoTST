@@ -264,9 +264,12 @@ class Gaussian():
         elif num_atoms <= 15:
             self.settings["nprocshared"] = 4
             self.settings["time"] = '08:00:00'
-        else:
+        elif num_atoms <= 20:
             self.settings["nprocshared"] = 6
             self.settings["time"] = '12:00:00'
+        else:
+            self.settings["nprocshared"] = 12
+            self.settings["time"] = '24:00:00'
 
         assert dispersion in ['GD3','GD3BJ','GD2',''],'Acceptable keywords for dispersion are GD3, GD3BJ, or GD2'
         if dispersion == '':
