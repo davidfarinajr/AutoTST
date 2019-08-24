@@ -304,7 +304,7 @@ def systematic_search(conformer,
 
     df.drop(df.index[redundant], inplace=True)
     logging.info("We have identified {} unique conformers for {}".format(
-        len(df.conformers), conformer))
+        len(df.conformer), conformer))
 
     confs = []
     i = 0
