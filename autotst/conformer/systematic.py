@@ -40,6 +40,7 @@ from ase import Atoms
 from ase import calculators
 from ase.calculators.calculator import FileIOCalculator
 from ase.optimize import BFGS
+from ase import units
 
 import autotst
 from autotst.species import Conformer
@@ -225,31 +226,17 @@ def systematic_search(conformer,
             opt.run()
         
         if type == 'ts':
-            f_max = None
             try:
-                # reaction_center_labels = conformer.get_labels()[0]
-                # reaction_center_forces = conformer.ase_molecule.get_forces()[reaction_center_labels]
-                # max_reaction_center_force = np.sqrt((reaction_center_forces**2).sum(axis=1).max())
-                # logging.info("The maximum reaction center force is {}".format(max_reaction_center_force))
-                # fmax = 0.10*max_reaction_center_force
-                # logging.info("Attempting to optimize with fmax of {}".format(fmax))
-                # opt.run(fmax=0.10*fmax)
                 opt.run(fmax=0.20, steps=1e6)
             except RuntimeError:
                 logging.info("Optimization failed...we will use the unconverged geometry")
                 pass
-                # try:
-                #     logging.info("Initial opt failed...will try opt with fmax of 0.5")
-                #     opt.run(fmax=0.50)
-                # except RuntimeError:
-                #     logging.info("Optimizations failed to converge...single point energy will be used")
-                #     pass
             
         conformer.update_coords_from("ase")
         energy = get_energy(conformer)
         conformer.energy = energy
-        return_dict[i] = (energy, conformer.ase_molecule.arrays,
-                          conformer.ase_molecule.get_all_distances())
+        return_dict[i] = conformer
+        
 
     manager = Manager()
     return_dict = manager.dict()
@@ -282,26 +269,24 @@ def systematic_search(conformer,
             if not p.is_alive():
                 complete[i] = True
 
-    from ase import units
-    results = []
-    for _, values in list(return_dict.items()):
-        results.append(values)
-
     energies = []
-    for i,conf in list(conformers.items()):
-        energies.append((i,conf,conf.energy))
+    for conf in list(return_dict.values()):
+        energies.append((conf,conf.energy))
 
-    #df = pd.DataFrame(results, columns=["energy", "arrays", 'distances'])
-    df = pd.DataFrame(energies,columns=["index","conformer","energy"])
+    df = pd.DataFrame(energies,columns=["conformer","energy"])
     df = df[df.energy < df.energy.min() + (5.0 * units.kcal / units.mol /
-            units.eV)].sort_values("energy").reset_index()
+            units.eV)].sort_values("energy").reset_index(drop=True)
+    print df
 
     redundant = []
     for i,j in itertools.combinations(range(len(df.conformer)),2):
-        rms = rdMolAlign.AlignMol(df.conformer[i].rdkit_molecule,df.conformer[j].rdkit_molecule)
-        if rms <= 0.1:
+        rmsd = rdMolAlign.AlignMol(df.conformer[i].rdkit_molecule,df.conformer[j].rdkit_molecule)
+        if rmsd <= 1.2:
+            print i,j,rmsd
             redundant.append(j)
 
+    redundant = list(set(redundant))
+    print redundant
     df.drop(df.index[redundant], inplace=True)
     logging.info("We have identified {} unique conformers for {}".format(
         len(df.conformer), conformer))
@@ -313,41 +298,4 @@ def systematic_search(conformer,
         confs.append(conf)
         i += 1
     
-    return confs
-
-
-    tolerance = 0.1
-    scratch_index = []
-    unique_index = []
-    for index in df.index:
-        if index in scratch_index:
-            continue
-        unique_index.append(index)
-        scratch_index.append(index)
-        distances = df.distances[index]
-        for other_index in df.index:
-            if other_index in scratch_index:
-                continue
-
-            other_distances = df.distances[other_index]
-
-            if tolerance > np.sqrt((distances - other_distances)**2).mean():
-                scratch_index.append(other_index)
-
-    logging.info("We have identified {} unique conformers for {}".format(
-        len(unique_index), conformer))
-    confs = []
-    i = 0
-    for info in df[["energy", "arrays"]].loc[unique_index].values:
-        copy_conf = conformer.copy()
-
-        energy, array = info
-        copy_conf.energy = energy
-        copy_conf.ase_molecule.set_positions(array["positions"])
-        copy_conf.update_coords_from("ase")
-        c = copy_conf.copy()
-        c.index = i
-        confs.append(c)
-        i += 1
-
     return confs
