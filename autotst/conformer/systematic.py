@@ -292,7 +292,7 @@ def systematic_search(conformer,
         energies.append((i,conf,conf.energy))
 
     #df = pd.DataFrame(results, columns=["energy", "arrays", 'distances'])
-    df = pd.Dataframe(energies,columns=["index","conformer","energy"])
+    df = pd.DataFrame(energies,columns=["index","conformer","energy"])
     df = df[df.energy < df.energy.min() + (5.0 * units.kcal / units.mol /
             units.eV)].sort_values("energy").reset_index()
 
