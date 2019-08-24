@@ -46,6 +46,8 @@ from autotst.species import Conformer
 from autotst.reaction import TS
 from autotst.conformer.utilities import get_energy, find_terminal_torsions
 
+from rdkit.Chem import rdMolAlign
+
 
 def find_all_combos(
         conformer,
@@ -245,6 +247,7 @@ def systematic_search(conformer,
             
         conformer.update_coords_from("ase")
         energy = get_energy(conformer)
+        conformer.energy = energy
         return_dict[i] = (energy, conformer.ase_molecule.arrays,
                           conformer.ase_molecule.get_all_distances())
 
@@ -284,9 +287,34 @@ def systematic_search(conformer,
     for _, values in list(return_dict.items()):
         results.append(values)
 
-    df = pd.DataFrame(results, columns=["energy", "arrays", 'distances'])
+    energies = []
+    for i,conf in list(conformers.items()):
+        energies.append((i,conf,conf.energy))
+
+    #df = pd.DataFrame(results, columns=["energy", "arrays", 'distances'])
+    df = pd.Dataframe(energies,columns=["index","conformer","energy"])
     df = df[df.energy < df.energy.min() + (5.0 * units.kcal / units.mol /
-            units.eV)].sort_values("energy")
+            units.eV)].sort_values("energy").reset_index()
+
+    redundant = []
+    for i,j in itertools.combinations(range(len(df.conformer)),2):
+        rms = rdMolAlign.AlignMol(df.conformer[i].rdkit_molecule,df.conformer[j].rdkit_molecule)
+        if rms <= 0.1:
+            redundant.append(j)
+
+    df.drop(df.index[redundant], inplace=True)
+    logging.info("We have identified {} unique conformers for {}".format(
+        len(df.conformers), conformer))
+
+    confs = []
+    i = 0
+    for conf in df.conformer:
+        conf.index = i
+        confs.append(conf)
+        i += 1
+    
+    return confs
+
 
     tolerance = 0.1
     scratch_index = []
