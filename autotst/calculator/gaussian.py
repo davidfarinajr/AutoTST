@@ -251,7 +251,7 @@ class Gaussian():
         method = method.upper()
         basis_set = basis_set.upper()
 
-        self.settings["mem"] = '2GB'
+        self.settings["mem"] = '5GB'
         num_atoms = self.conformer.rmg_molecule.getNumAtoms()
         
         if num_atoms <= 4:
