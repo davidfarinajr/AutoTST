@@ -178,6 +178,13 @@ def systematic_search(conformer,
 
         conformers[index] = conformer.copy()
 
+    redundant = []
+    for i,j in itertools.combinations(range(len(conformers)),2):
+        rmsd = rdMolAlign.AlignMol(conformers[i].rdkit_molecule,conformers[j].rdkit_molecule)
+        if rmsd <= 0.2:
+            redundant.append(j)
+    [conformers.pop(j) for j in list(set(redundant))]
+
     logging.info(
         "There are {} unique conformers generated".format(len(conformers)))
 
