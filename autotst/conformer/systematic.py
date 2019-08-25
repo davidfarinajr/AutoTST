@@ -41,6 +41,7 @@ from ase import calculators
 from ase.calculators.calculator import FileIOCalculator
 from ase.optimize import BFGS
 from ase import units
+from ase.constraints import FixBondLengths
 
 import autotst
 from autotst.species import Conformer
@@ -175,15 +176,8 @@ def systematic_search(conformer,
             conformer.set_chirality(center.index, s_r)
 
         conformer.update_coords_from("ase")
-
+  
         conformers[index] = conformer.copy()
-
-    redundant = []
-    for i,j in itertools.combinations(range(len(conformers)),2):
-        rmsd = rdMolAlign.AlignMol(conformers[i].rdkit_molecule,conformers[j].rdkit_molecule)
-        if rmsd <= 0.2:
-            redundant.append(j)
-    [conformers.pop(j) for j in list(set(redundant))]
 
     logging.info(
         "There are {} unique conformers generated".format(len(conformers)))
@@ -194,11 +188,10 @@ def systematic_search(conformer,
         Only for use within this parent function
         """
 
-        labels = []
-        for bond in conformer.get_bonds():
-            labels.append(bond.atom_indices)
-
         if isinstance(conformer, TS):
+            labels = []
+            for bond in conformer.get_bonds():
+                labels.append(bond.atom_indices)
             label = conformer.reaction_label
             ind1 = conformer.rmg_molecule.getLabeledAtom("*1").sortingLabel
             ind2 = conformer.rmg_molecule.getLabeledAtom("*3").sortingLabel
@@ -223,16 +216,19 @@ def systematic_search(conformer,
 
             calculator.atoms = conformer.ase_molecule
 
-        from ase.constraints import FixBondLengths
-        c = FixBondLengths(labels)
-        conformer.ase_molecule.set_constraint(c)
         conformer.ase_molecule.set_calculator(calculator)
         opt = BFGS(conformer.ase_molecule, logfile=None)
 
         if type == 'species':
-            opt.run()
+            try:
+                opt.run(steps=100)
+            except RuntimeError:
+                logging.info("Optimization failed...we will use the unconverged geometry")
+                pass
         
         if type == 'ts':
+            c = FixBondLengths(labels)
+            conformer.ase_molecule.set_constraint(c)
             try:
                 opt.run(fmax=0.20, steps=1e6)
             except RuntimeError:
@@ -242,6 +238,11 @@ def systematic_search(conformer,
         conformer.update_coords_from("ase")
         energy = get_energy(conformer)
         conformer.energy = energy
+        if len(return_dict)>0:
+            for index,conf in return_dict.items():
+                rmsd = rdMolAlign.GetBestRMS(conformer.rdkit_molecule,conf.rdkit_molecule)
+                if rmsd <= 1.2:
+                    return
         return_dict[i] = conformer
         
 
@@ -281,19 +282,18 @@ def systematic_search(conformer,
         energies.append((conf,conf.energy))
 
     df = pd.DataFrame(energies,columns=["conformer","energy"])
-    df = df[df.energy < df.energy.min() + (5.0 * units.kcal / units.mol /
+    df = df[df.energy < df.energy.min() + (10.0 * units.kcal / units.mol /
             units.eV)].sort_values("energy").reset_index(drop=True)
     print df
 
     redundant = []
     for i,j in itertools.combinations(range(len(df.conformer)),2):
-        rmsd = rdMolAlign.AlignMol(df.conformer[i].rdkit_molecule,df.conformer[j].rdkit_molecule)
+        rmsd = rdMolAlign.GetBestRMS(df.conformer[i].rdkit_molecule,df.conformer[j].rdkit_molecule)
         if rmsd <= 1.2:
             print i,j,rmsd
             redundant.append(j)
 
     redundant = list(set(redundant))
-    print redundant
     df.drop(df.index[redundant], inplace=True)
     logging.info("We have identified {} unique conformers for {}".format(
         len(df.conformer), conformer))
