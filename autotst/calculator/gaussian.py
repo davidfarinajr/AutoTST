@@ -251,7 +251,7 @@ class Gaussian():
         method = method.upper()
         basis_set = basis_set.upper()
 
-        self.settings["mem"] = '5GB'
+        self.settings["mem"] = '10GB'
         num_atoms = self.conformer.rmg_molecule.getNumAtoms()
         
         if num_atoms <= 4:
@@ -266,11 +266,11 @@ class Gaussian():
         elif num_atoms <= 20:
             self.settings["nprocshared"] = 8
             self.settings["time"] = '12:00:00'
-            self.settings["mem"] = '10GB'
+            self.settings["mem"] = '20GB'
         else:
             self.settings["nprocshared"] = 12
             self.settings["time"] = '24:00:00'
-            self.settings["mem"] = '10GB'
+            self.settings["mem"] = '20GB'
 
         if dispersion:
             dispersion = dispersion.upper()
