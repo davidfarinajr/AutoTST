@@ -262,13 +262,15 @@ class Gaussian():
             self.settings["time"] = '06:00:00'
         elif num_atoms <= 15:
             self.settings["nprocshared"] = 4
-            self.settings["time"] = '08:00:00'
-        elif num_atoms <= 20:
-            self.settings["nprocshared"] = 6
             self.settings["time"] = '12:00:00'
+        elif num_atoms <= 20:
+            self.settings["nprocshared"] = 8
+            self.settings["time"] = '12:00:00'
+            self.settings["mem"] = '10GB'
         else:
             self.settings["nprocshared"] = 12
             self.settings["time"] = '24:00:00'
+            self.settings["mem"] = '10GB'
 
         if dispersion:
             dispersion = dispersion.upper()
