@@ -378,7 +378,8 @@ class Gaussian():
             nprocshared=self.settings["nprocshared"],
             label=label,
             scratch=new_scratch,
-            method=method,
+            method= method,
+            basis = '',
             extra="SP",
             multiplicity=self.conformer.rmg_molecule.multiplicity)
         ase_gaussian.atoms = self.conformer.ase_molecule
