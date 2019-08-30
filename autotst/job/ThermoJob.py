@@ -130,10 +130,6 @@ class ThermoJob():
                 self.scratch = '.'
             else:
                 self.scratch = scratch
-        
-        self.sp_calculator = sp_calculator
-        if self.sp_calculator:
-            assert isinstance(self.sp_calculator,Orca)
 
         self.conformer_calculator = conformer_calculator
         if self.conformer_calculator:
