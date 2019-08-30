@@ -132,8 +132,10 @@ class Gaussian():
                     setting, value))
                 settings[setting] = value
 
+
         self.command = "g16"
         self.settings = settings
+        self.opt_method = settings["method"].upper() + '_' + settings["basis"].upper()
         self.convergence = convergence
         convergence_options = ["", "verytight", "tight", "loose"]
         assert self.convergence.lower() in convergence_options,"{} is not among the supported convergence options {}".format(self.convergence,convergence_options)
@@ -282,6 +284,8 @@ class Gaussian():
             dispersion = ''
             method_name = method + '_' + basis_set
         
+        self.opt_method = method_name
+
         if isinstance(self.conformer, TS):
             logging.info(
                 "TS object provided, cannot obtain a species calculator for a TS")
@@ -316,6 +320,66 @@ class Gaussian():
             method=method,
             basis=basis_set,
             extra="opt=(calcfc,maxcycles=900,{}) {} freq IOP(7/33=1,2/16=3) scf=(maxcycle=900)".format(convergence,dispersion),
+            multiplicity=self.conformer.rmg_molecule.multiplicity)
+        ase_gaussian.atoms = self.conformer.ase_molecule
+        ase_gaussian.directory = new_scratch
+        ase_gaussian.parameters["partition"] = self.settings["partition"]
+        ase_gaussian.parameters["time"] = self.settings["time"]
+        del ase_gaussian.parameters['force']
+        return ase_gaussian
+
+    def get_SP_calc(self,method='G4'):
+
+        method = method.upper()
+        gaussian_methods = [
+            "G1","G2","G3","G4","G2MP2","G3MP2","G3B3","G3MP2B3","G4","G4MP2",
+            "W1","W1U","W1BD","W1RO",
+            "CBS-4M","CBS-QB3","CBS-APNO",
+        ]
+        assert method in methods
+
+        self.settings["time"] = "24:00:00"
+        if "W" in method:
+            self.settings["mem"] = '100GB'
+            self.settings["nprocshared"] = 18
+        else:
+            self.settings["mem"] = '80GB'
+            self.settings["nprocshared"] = 12
+            
+        
+        if isinstance(self.conformer, TS):
+            logging.info(
+                "TS object provided, cannot obtain a species calculator for a TS")
+            return None
+
+        assert isinstance(
+            self.conformer, Conformer), "A Conformer object was not provided..."
+
+        self.conformer.rmg_molecule.updateMultiplicity()
+
+        label = "{}_{}".format(self.conformer.smiles, method)
+
+        new_scratch = os.path.join(
+            self.directory,
+            "species",
+            self.opt_method,
+            self.conformer.smiles,
+            "conformers"
+        )
+
+        try:
+            os.makedirs(new_scratch)
+        except OSError:
+            pass
+
+       
+        ase_gaussian = ASEGaussian(
+            mem=self.settings["mem"],
+            nprocshared=self.settings["nprocshared"],
+            label=label,
+            scratch=new_scratch,
+            method=method,
+            extra="SP",
             multiplicity=self.conformer.rmg_molecule.multiplicity)
         ase_gaussian.atoms = self.conformer.ase_molecule
         ase_gaussian.directory = new_scratch
