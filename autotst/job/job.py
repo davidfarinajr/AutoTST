@@ -185,6 +185,7 @@ class Job():
         A helper method that allows one to easily parse log files
         """
         symbol_dict = {
+            53: "I",
             35: "Br",
             17: "Cl",
             9:  "F",
@@ -1538,6 +1539,7 @@ class Job():
             first_is_lowest, min_energy, atomnos, atomcoords = self.check_rotor_lowest_conf(
                 parser=parser)
             symbol_dict = {
+                53: "I",
                 35: "Br",
                 17: "Cl",
                 9:  "F",

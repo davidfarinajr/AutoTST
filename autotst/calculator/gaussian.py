@@ -53,6 +53,7 @@ def read_log(file_path=None):
         A helper method that allows one to easily parse log files
         """
         symbol_dict = {
+            53: "I",
             35: "Br",
             17: "Cl",
             9:  "F",
