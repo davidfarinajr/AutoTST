@@ -336,7 +336,7 @@ class Gaussian():
             "W1","W1U","W1BD","W1RO",
             "CBS-4M","CBS-QB3","CBS-APNO",
         ]
-        assert method in methods
+        assert method in gaussian_methods
 
         self.settings["time"] = "24:00:00"
         if "W" in method:
