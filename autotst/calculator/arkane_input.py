@@ -67,7 +67,9 @@ class Arkane_Input():
         sym_num = self.molecule.calculateSymmetryNumber()
         mult = self.molecule.multiplicity
         path = os.path.join(self.directory,self.smiles+'.py')
-        gaussian_path = os.path.basename(self.energy_log_path)
+        energy_path = os.path.basename(self.energy_log_path)
+        geometry_path = os.path.basename(self.geometry_log_path)
+        frequencies_path = os.path.basename(self.frequencies_log_path)
 
         with open(path,'w+') as f:
             f.write('#SMILES = {}\n'.format(self.smiles))
@@ -75,9 +77,9 @@ class Arkane_Input():
             f.write('externalSymmetry = {}\n'.format(sym_num))
             f.write('spinMultiplicity = {}\n'.format(mult))
             f.write('opticalIsomers = 1\n')
-            f.write('geometry = GaussianLog("{}")\n'.format(gaussian_path))
-            f.write('frequencies = GaussianLog("{}")\n'.format(gaussian_path))
-            f.write('energy = GaussianLog("{}")\n'.format(gaussian_path))
+            f.write('geometry = GaussianLog("{}")\n'.format(geometry_path))
+            f.write('frequencies = GaussianLog("{}")\n'.format(frequencies_path))
+            f.write('energy = GaussianLog("{}")\n'.format(energy_path))
             f.close()
 
         return path
