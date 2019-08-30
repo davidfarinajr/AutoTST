@@ -45,7 +45,7 @@ def check_complete(label, user):
     """
     A method to determine if a job is still running
     """
-    command = """squeue -n "{}" -u "{}" """.format(label,user,partition)
+    command = """squeue -n "{}" -u "{}" """.format(label,user)
     output = subprocess.Popen(
         command,
         shell=True,
@@ -105,6 +105,7 @@ class ThermoJob():
 
         self.calculator = calculator
         self.sp_calculator = None
+        self.method_name = None
         if self.calculator:
             if directory is None:
                 logging.info("Job directory not specified...setting Job directory to calculator directory")
@@ -166,7 +167,8 @@ class ThermoJob():
         #log_path = os.path.join(ase_calculator.scratch, label)
 
         #gaussian_scratch = os.environ['GAUSS_SCRDIR']
-        os.environ['GAUSS_SCRDIR'] = '/scratch/westgroup/GAUSS_SCRDIR/'
+        gaussian_scratch = '/scratch/westgroup/GAUSS_SCRDIR/'
+        os.environ['GAUSS_SCRDIR'] = gaussian_scratch
         if not os.path.exists(gaussian_scratch):
             os.makedirs(gaussian_scratch)
 
@@ -310,7 +312,7 @@ class ThermoJob():
             self.directory,
             "species",
             method_name,
-            self.conformer.smiles,
+            conformer.smiles,
             "sp"
         )
         label = calc.label
@@ -410,6 +412,7 @@ class ThermoJob():
             return False
 
     def calculate_species(self, method = 'm062x', basis_set = 'cc-pvtz', dispersion= None,
+                            optimize = True,
                           recalculate=False, calculate_fod=True, single_point_method=None,
                           arkane_dft = True, arkane_sp = True):
         """
@@ -425,142 +428,146 @@ class ThermoJob():
         if dispersion:
             dispersion = dispersion.upper()
             method_name = method + '-' + dispersion + '_' + basis_set
+            self.method_name = method_name
         else:
             method_name = method + '_' + basis_set
-
-        for smiles in self.species.smiles:
-            got_one = False
-            label =  "{}_{}_optfreq".format(smiles,method_name)
-            log_path = os.path.join(self.calculator.directory,"species",method_name,smiles,label+".log")
-            if os.path.exists(log_path) and not recalculate:
-                logging.info('It appears we already calculated this species')
-                logging.info('Checking to see if the log is complete and converge...')
-                complete, converged = self.calculator.verify_output_file(log_path)
-                
-                if (complete and converged):
-                    logging.info('creating a sample conformer for isomorphism test...')
-                    conf = Conformer(smiles=smiles)
-                    if check_isomorphic(conformer=conf, log_path=log_path):
-                        got_one = True
-                        logging.info('The existing log has been verified')
+            self.method_name = method_name
+        
+        if optimize:
+            for smiles in self.species.smiles:
+                got_one = False
+                label =  "{}_{}_optfreq".format(smiles,method_name)
+                log_path = os.path.join(self.calculator.directory,"species",method_name,smiles,label+".log")
+                if os.path.exists(log_path) and not recalculate:
+                    logging.info('It appears we already calculated this species')
+                    logging.info('Checking to see if the log is complete and converge...')
+                    complete, converged = self.calculator.verify_output_file(log_path)
+                    
+                    if (complete and converged):
+                        logging.info('creating a sample conformer for isomorphism test...')
+                        conf = Conformer(smiles=smiles)
+                        if check_isomorphic(conformer=conf, log_path=log_path):
+                            got_one = True
+                            logging.info('The existing log has been verified')
+                        else:
+                            logging.info('removing existing log and restarting calculation...')
+                            os.remove(log_path)
+                        
                     else:
+                        logging.info('the existing log did not complete or converge')
                         logging.info('removing existing log and restarting calculation...')
                         os.remove(log_path)
+
+                if recalculate or not got_one:
+                    logging.info("Calculating geometries for {}".format(species))
+
+                    if self.conformer_calculator:
+                        species.generate_conformers(ase_calculator=self.conformer_calculator)
+
+                    currently_running = []
+                    processes = {}
+                    #for smiles, conformers in list(species.conformers.items()):
+                    #for conformers in list(species.conformers[smiles]):
                     
-                else:
-                    logging.info('the existing log did not complete or converge')
-                    logging.info('removing existing log and restarting calculation...')
-                    os.remove(log_path)
+                    for conformer in species.conformers[smiles]:
+                        process = Process(target=self.calculate_conformer, args=(
+                            conformer,method,basis_set,dispersion))
+                        processes[process.name] = process
 
-            if recalculate or not got_one:
-                logging.info("Calculating geometries for {}".format(species))
-
-                if self.conformer_calculator:
-                    species.generate_conformers(ase_calculator=self.conformer_calculator)
-
-                currently_running = []
-                processes = {}
-                #for smiles, conformers in list(species.conformers.items()):
-                #for conformers in list(species.conformers[smiles]):
-                
-                for conformer in species.conformers[smiles]:
-                    process = Process(target=self.calculate_conformer, args=(
-                        conformer,method,basis_set,dispersion))
-                    processes[process.name] = process
-
-                # This loop will block until everything in processes 
-                # has been started, and added to currently_running
-                for name, process in list(processes.items()):
-                    # while len(currently_running) >= 50:
-                    #     for running in currently_running:
-                    #         if not running.is_alive():
-                    #             currently_running.remove(name)
-                    #     time.sleep(15)
-                    process.start()
-                    currently_running.append(name)
-
-                # This loop will block until everything in currently_running
-                # has finished.
-                while len(currently_running) > 0:
+                    # This loop will block until everything in processes 
+                    # has been started, and added to currently_running
                     for name, process in list(processes.items()):
-                        if not (name in currently_running):
-                            continue
-                        if not process.is_alive():
-                            currently_running.remove(name)
-                    time.sleep(15)
+                        # while len(currently_running) >= 50:
+                        #     for running in currently_running:
+                        #         if not running.is_alive():
+                        #             currently_running.remove(name)
+                        #     time.sleep(15)
+                        process.start()
+                        currently_running.append(name)
 
-                results = []
-                #for smiles, conformers in list(species.conformers.items()):
-                #for conformers in species.conformers[smiles]:
-                for conformer in list(species.conformers[smiles]):
-                    scratch_dir = os.path.join(
-                        self.directory,
-                        "species",
-                        method_name,
-                        conformer.smiles,
-                        "conformers"
-                    )
-                    f = "{}_{}_{}_optfreq.log".format(conformer.smiles, conformer.index, method_name)
-                    path = os.path.join(scratch_dir, f)
-                    if not os.path.exists(path):
-                        logging.info(
-                            "It seems that {} was never run...".format(f))
-                        continue
-                    try:
-                        parser = ccread(path, loglevel=logging.ERROR)
-                        if parser is None:
+                    # This loop will block until everything in currently_running
+                    # has finished.
+                    while len(currently_running) > 0:
+                        for name, process in list(processes.items()):
+                            if not (name in currently_running):
+                                continue
+                            if not process.is_alive():
+                                currently_running.remove(name)
+                        time.sleep(15)
+
+                    results = []
+                    #for smiles, conformers in list(species.conformers.items()):
+                    #for conformers in species.conformers[smiles]:
+                    for conformer in list(species.conformers[smiles]):
+                        scratch_dir = os.path.join(
+                            self.directory,
+                            "species",
+                            method_name,
+                            conformer.smiles,
+                            "conformers"
+                        )
+                        f = "{}_{}_{}_optfreq.log".format(conformer.smiles, conformer.index, method_name)
+                        path = os.path.join(scratch_dir, f)
+                        if not os.path.exists(path):
                             logging.info(
-                                "Something went wrong when reading in results for {} using cclib...".format(f))
+                                "It seems that {} was never run...".format(f))
                             continue
-                        energy = parser.scfenergies[-1]
-                    except:
+                        try:
+                            parser = ccread(path, loglevel=logging.ERROR)
+                            if parser is None:
+                                logging.info(
+                                    "Something went wrong when reading in results for {} using cclib...".format(f))
+                                continue
+                            energy = parser.scfenergies[-1]
+                        except:
+                            logging.info(
+                                "The parser does not have an scf energies attribute, we are not considering {}".format(f))
+                            energy = 1e5
+
+                        results.append([energy, conformer, f])
+
+                    results = pd.DataFrame(
+                        results, columns=["energy", "conformer", "file"]).sort_values("energy").reset_index()
+
+                    if results.shape[0] == 0:
                         logging.info(
-                            "The parser does not have an scf energies attribute, we are not considering {}".format(f))
-                        energy = 1e5
+                            "No conformer for {} was successfully calculated... :(".format(species))
+                        return False
+                    
+                    conformer = results['conformer'][0]
+                    lowest_energy_file = results['file'][0]
 
-                    results.append([energy, conformer, f])
+                    # for index in range(results.shape[0]):
+                    #     conformer = results.conformer[index]
+                    #     lowest_energy_file = results.file[index]
+                    #     break
 
-                results = pd.DataFrame(
-                    results, columns=["energy", "conformer", "file"]).sort_values("energy").reset_index()
-
-                if results.shape[0] == 0:
                     logging.info(
-                        "No conformer for {} was successfully calculated... :(".format(species))
-                    return False
-                
-                conformer = results['conformer'][0]
-                lowest_energy_file = results['file'][0]
+                        "The lowest energy conformer is {}".format(lowest_energy_file))
 
-                # for index in range(results.shape[0]):
-                #     conformer = results.conformer[index]
-                #     lowest_energy_file = results.file[index]
-                #     break
+                    lowest_energy_file_path = os.path.join(self.calculator.directory, "species",method_name, conformer.smiles,"conformers",lowest_energy_file)
+                    label =  "{}_{}_optfreq".format(conformer.smiles,method_name)
+                    dest = os.path.join(self.calculator.directory,"species",method_name,conformer.smiles,label+".log")
 
-                logging.info(
-                    "The lowest energy conformer is {}".format(lowest_energy_file))
+                    try:
+                        copyfile(lowest_energy_file_path,dest)
+                    except IOError:
+                        os.makedirs(os.path.dirname(dest))
+                        copyfile(lowest_energy_file_path,dest)
 
-                lowest_energy_file_path = os.path.join(self.calculator.directory, "species",method_name, conformer.smiles,"conformers",lowest_energy_file)
-                label =  "{}_{}_optfreq".format(conformer.smiles,method_name)
-                dest = os.path.join(self.calculator.directory,"species",method_name,conformer.smiles,label+".log")
+                    logging.info("The lowest energy file is {}! :)".format(
+                        lowest_energy_file))
 
-                try:
-                    copyfile(lowest_energy_file_path,dest)
-                except IOError:
-                    os.makedirs(os.path.dirname(dest))
-                    copyfile(lowest_energy_file_path,dest)
+                    parser = ccread(dest, loglevel=logging.ERROR)
+                    xyzpath = os.path.join(self.calculator.directory,"species",method_name,conformer.smiles,label+".xyz")
+                    parser.writexyz(xyzpath)
 
-                logging.info("The lowest energy file is {}! :)".format(
-                    lowest_energy_file))
-
-                parser = ccread(dest, loglevel=logging.ERROR)
-                xyzpath = os.path.join(self.calculator.directory,"species",method_name,conformer.smiles,label+".xyz")
-                parser.writexyz(xyzpath)
-
-                logging.info("The lowest energy xyz file is {}!".format(
-                    xyzpath))
+                    logging.info("The lowest energy xyz file is {}!".format(
+                        xyzpath))
 
         if calculate_fod:  # We will run an orca FOD job
-
+            
+            method_name = self.method_name
             # Update the lowest energy conformer 
             # with the lowest energy logfile
             for smiles in self.species.smiles:
@@ -574,11 +581,11 @@ class ThermoJob():
                 self._calculate_fod(conformer=conformer,method_name=method_name)
 
         if single_point_method:
-            
+            method_name = self.method_name
             for smiles in self.species.smiles:
                 label =  "{}_{}".format(smiles,method_name)
                 conformer = Conformer(smiles=smiles)
-                log = os.path.join(self.directory,"species",conformer.smiles,label+"_optfreq.log")
+                log = os.path.join(self.directory,"species",method_name,conformer.smiles,label+"_optfreq.log")
                 assert os.path.exists(log), "It appears the calculation failed for {}...cannot perform single point calculations".format(conformer.smiles)
                 atoms = read_log(log)
                 conformer.ase_molecule = atoms
