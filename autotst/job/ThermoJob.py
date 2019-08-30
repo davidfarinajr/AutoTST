@@ -41,11 +41,11 @@ def get_discovery_username():
         pass
     return discovery_username
 
-def check_complete(label, user, partition):
+def check_complete(label, user):
     """
     A method to determine if a job is still running
     """
-    command = """squeue -n "{}" -u "{}" -p "{}" """.format(label,user,partition)
+    command = """squeue -n "{}" -u "{}" """.format(label,user,partition)
     output = subprocess.Popen(
         command,
         shell=True,
@@ -90,7 +90,6 @@ class ThermoJob():
             species=None,
             calculator=None,
             conformer_calculator = None, # an ASE Calculator object
-            sp_calculator=None,
             partition="general", # The partition to run calculations on
             discovery_username= None, # discovery user account (for checking on jobs in the queue)
             directory = None, # where to save your files 
@@ -105,6 +104,7 @@ class ThermoJob():
         self.species = species 
 
         self.calculator = calculator
+        self.sp_calculator = None
         if self.calculator:
             if directory is None:
                 logging.info("Job directory not specified...setting Job directory to calculator directory")
@@ -169,7 +169,8 @@ class ThermoJob():
 
         #log_path = os.path.join(ase_calculator.scratch, label)
 
-        gaussian_scratch = os.environ['GAUSS_SCRDIR']
+        #gaussian_scratch = os.environ['GAUSS_SCRDIR']
+        os.environ['GAUSS_SCRDIR'] = '/scratch/westgroup/GAUSS_SCRDIR/'
         if not os.path.exists(gaussian_scratch):
             os.makedirs(gaussian_scratch)
 
@@ -183,7 +184,7 @@ class ThermoJob():
                 logging.info(
                     "It appears that this job has already been run, not running it a second time.")
 
-        if not check_complete(label=label, user=self.discovery_username, partition=self.partition):
+        if not check_complete(label=label, user=self.discovery_username):
             logging.info("It appears that {} is already in the queue...not submitting".format(label))
             return label
 
@@ -225,7 +226,7 @@ class ThermoJob():
             "Submitting conformer calculation for {}".format(calc.label))
         label = self._submit_conformer(conformer,calc)
         time.sleep(15)
-        while not check_complete(label=label,user=self.discovery_username,partition=calc.parameters["partition"]):
+        while not check_complete(label=label,user=self.discovery_username):
             time.sleep(15)
 
         complete, converged = self.calculator.verify_output_file(log_path)
@@ -237,7 +238,7 @@ class ThermoJob():
             calc.parameters["nprocshared"] = 12
             label = self._submit_conformer(conformer,calc,restart=True)
             time.sleep(10)
-            while not check_complete(label=label,user=self.discovery_username,partition=calc.parameters["partition"]):
+            while not check_complete(label=label,user=self.discovery_username):
                 time.sleep(15)
 
             complete, converged = self.calculator.verify_output_file(log_path)
@@ -254,7 +255,7 @@ class ThermoJob():
             calc.parameters["nprocshared"] = 16
             label = self._submit_conformer(conformer,calc, restart=True)
             time.sleep(10)
-            while not check_complete(label=label,user=self.discovery_username,partition=calc.parameters["partition"]):
+            while not check_complete(label=label,user=self.discovery_username):
                 time.sleep(15)
 
             complete, converged = self.calculator.verify_output_file(log_path)
@@ -281,7 +282,7 @@ class ThermoJob():
 
             label = self._submit_conformer(conformer,calc)
             time.sleep(10)
-            while not check_complete(label=label,user=self.discovery_username,partition=calc.parameters["partition"]):
+            while not check_complete(label=label,user=self.discovery_username):
                 time.sleep(15)
 
             if not os.path.exists(log_path):
@@ -304,6 +305,35 @@ class ThermoJob():
                 return check_isomorphic(conformer=conformer,log_path=log_path)
 
         raise Exception("Shoudn't reach here")
+
+    def calculate_sp(self,conformer,method_name,single_point_method):
+ 
+        self.calculator.conformer = conformer
+        calc = self.calculator.get_SP_calc(method=single_point_method)
+        calc.scratch = calc.directory = os.path.join(
+            self.directory,
+            "species",
+            method_name,
+            self.conformer.smiles,
+            "sp"
+        )
+        label = calc.label
+        log_path = os.path.join(calc.scratch,calc.label + ".log")
+        logging.info(
+            "Submitting {} calculation".format(calc.label))
+        label = self._submit_conformer(conformer,calc)
+        time.sleep(15)
+        while not check_complete(label=label,user=self.discovery_username):
+            time.sleep(15)
+
+        complete, _ = self.calculator.verify_output_file(log_path)
+
+        if (not complete) or (not os.path.exists(log_path)):
+            logging.info(
+                "It seems that the file never completed for {}".format(calc.label))
+            return False
+        else:
+            return True
 
     def _calculate_fod(self,conformer,method_name):
         """
@@ -360,11 +390,11 @@ class ThermoJob():
             logging.info(
                 "Starting FOD calculation for {}".format(conformer))
             subprocess.Popen(
-                """sbatch --exclude=c5003,c3040 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p test -N 1 -n 4 -t 10:00 --mem=5GB $AUTOTST/autotst/job/orca_submit.sh""".format(
+                """sbatch --exclude=c5003,c3040 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p test,general -N 1 -n 4 -t 10:00 --mem=5GB $AUTOTST/autotst/job/orca_submit.sh""".format(
                     label), shell=True, cwd=orca_calc.directory)
             time.sleep(10)
         # wait unitl the job is done
-        while not check_complete(label=label, user=self.discovery_username, partition="test"):
+        while not check_complete(label=label, user=self.discovery_username):
             time.sleep(10)
 
         # If the log file exits, check to see if it terminated normally
@@ -383,101 +413,9 @@ class ThermoJob():
             logging.info("It appears the FOD orca job never ran")
             return False
 
-    def _generate_sp_inputs(self,conformer,method_name):
-
-        if isinstance(self.sp_calculator,Orca):
-            orca_calc = self.sp_calculator
-
-            hf = orca_calc.write_sp_input(method='hf',basis='ma-def2-qzvpp')
-        
-            ex1 = orca_calc.write_extrapolation_input(option='ep3')
-            # ex2 = orca_calc.write_extrapolation_input(option='3',method='ccsd(t)')
-
-            # sp1 = orca_calc.write_sp_input(
-            #     method='ccsd(t)', basis='aug-cc-pvtz', atom_basis={'Cl':'cc-pvt(+d)z','H':'cc-pvtz'}, use_atom_basis=True)
-            # sp2 = orca_calc.write_sp_input(
-            #     method='ccsd(t)', basis='aug-cc-pvqz', atom_basis={'Cl':'cc-pvq(+d)z','H':'cc-pvqz'}, use_atom_basis=True)
-
-            if 35 not in conformer.ase_molecule.get_atomic_numbers():
-                sp3 = orca_calc.write_sp_input(method='ccsd(t)-f12', basis='cc-pvdz-f12', atom_basis={'Cl': 'cc-pvt(+d)z'}, use_atom_basis=True)
-                sp4 = orca_calc.write_sp_input(method='ccsd(t)-f12', basis='cc-pvtz-f12', atom_basis={'Cl': 'cc-pvq(+d)z'}, use_atom_basis=True)
-                # labels = [hf,sp1,sp2,sp3,sp4,ex1,ex2]
-                labels = [hf,ex1,sp3,sp4]
-            else:
-                # labels = [hf,sp1,sp2,ex1,ex2]
-                labels = [hf,ex1]
-
-            return labels
-        
-        else:
-            logging.info("We currently do not support single point calculations for {}".format(self.sp_calculator))
-            return None
-
-
-
-    def _calculate_sp(self,conformer,label):
-    
- 
-        if isinstance(self.sp_calculator,Orca):
-            orca_calc = self.sp_calculator
-
-        file_path = os.path.join(orca_calc.directory, label)
-
-        os.environ["label"] = label
-
-        # Do not run orca if log file is already there
-        attempted = False
-        complete = False
-        if os.path.exists(file_path + ".log"):
-            attempted = True
-            logging.info(
-                "It appears that this job already ran")
-            if orca_calc.check_NormalTermination(file_path + ".log"):
-                complete = True
-                logging.info("The single point calculation completed! The log file is {}".format(
-                    file_path + ".log"))
-                copyfile(
-                    file_path + ".log", os.path.join(self.directory, "species", conformer.smiles, label + ".log"))
-                return True
-                
-            else:
-                logging.info(
-                    "It appears {} did not terminate normally! Rerunning calculation").format(file_path + ".log")
-                complete = False
-
-        # In log file does not exist, run Orca
-        if not attempted or not complete:
-            logging.info(
-                "Starting {} single point calculation for {}".format(file_path,conformer))
-            if int(self.sp_calculator.nprocs) >= 20:
-                exclusive = '--exclusive'
-            else:
-                exclusive = ''
-            subprocess.Popen(
-                """sbatch {0} --exclude=c5003,c3040 --job-name="{1}" --output="{1}.log" --error="{1}.slurm.log" -p {2} -N 1 -n {3} -t {4} --mem={5} $AUTOTST/autotst/job/orca_submit.sh""".format(
-                    exclusive,label,orca_calc.partition,orca_calc.nprocs,orca_calc.time,orca_calc.mem), shell=True, cwd=orca_calc.directory)  
-            time.sleep(15)
-
-        while not check_complete(label=label, user=self.discovery_username, partition=orca_calc.partition):
-            time.sleep(15)
-
-                # If the log file exits, check to see if it terminated normally
-        if os.path.exists(file_path + ".log"):
-            if orca_calc.check_NormalTermination(file_path + ".log"):
-                logging.info("The single point calculation {} completed! The log file is {}".format(label,
-                    file_path + ".log"))
-                copyfile(
-                    file_path + ".log", os.path.join(self.directory, "species", conformer.smiles, label + ".log"))
-                return True
-            else:
-                logging.info("It appears the single point calculation {} did not terminate normally".format(label))
-                return False
-        else:
-            logging.info("It appears the single point calculation {} never ran".format(label))
-            return False
-
     def calculate_species(self, method = 'm062x', basis_set = 'cc-pvtz', dispersion= None,
-                          recalculate=False, calculate_fod=False, single_point=False):
+                          recalculate=False, calculate_fod=True, single_point_method=None,
+                          arkane_dft = True, arkane_sp = True):
         """
         Calculates the energy and harmonic frequencies of the lowest energy conformer of a species:
         1) Systematically generates low energy conformers for a given species with an ASE calculator.
@@ -630,7 +568,7 @@ class ThermoJob():
             # Update the lowest energy conformer 
             # with the lowest energy logfile
             for smiles in self.species.smiles:
-                label =  "{}_{}".format(smiles,method_name,basis_set)
+                label =  "{}_{}".format(smiles,method_name)
                 conformer = Conformer(smiles=smiles)
                 log = os.path.join(self.calculator.directory,"species",method_name,conformer.smiles,label+"_optfreq.log")
                 assert os.path.exists(log),"It appears the calculation failed for {}...cannot calculate fod".format(conformer.smiles)
@@ -639,161 +577,188 @@ class ThermoJob():
                 conformer.update_coords_from("ase")
                 self._calculate_fod(conformer=conformer,method_name=method_name)
 
-        if single_point:
+        if single_point_method:
             
             for smiles in self.species.smiles:
-                label =  "{}_{}_{}".format(self.species.smiles[0],method_name,basis_set)
-                conformer = Conformer(smiles=species.smiles[0])
-                log = os.path.join(self.directory,"species",conformer.smiles,label+".log")
+                label =  "{}_{}".format(smiles,method_name)
+                conformer = Conformer(smiles=smiles)
+                log = os.path.join(self.directory,"species",conformer.smiles,label+"_optfreq.log")
                 assert os.path.exists(log), "It appears the calculation failed for {}...cannot perform single point calculations".format(conformer.smiles)
-                atoms = self.read_log(log)
+                atoms = read_log(log)
                 conformer.ase_molecule = atoms
                 conformer.update_coords_from("ase")
 
-                valence_dict = {
-                1:1,
-                6:4,
-                7:5,
-                8:6,
-                9:7,
-                17:7,
-                35:7
-                }
-
-                total_valence = 0
-                for atom in conformer.ase_molecule.get_atomic_numbers():
-                    total_valence += valence_dict.get(atom)
-
-                if total_valence <= 8:
-                    nprocs = 2
-                    mem = '12GB'
-                    t = '01:00:00'
-                    partition = 'test'
-                elif total_valence >8 and total_valence <=14:
-                    nprocs = 10
-                    mem = '60GB'
-                    t = '1-00:00:00'
-                    partition = 'general'
-                else:
-                    nprocs = 20
-                    mem = '110GB'
-                    t = '1-00:00:00'
-                    partition = 'general'        
-
+                if isinstance(single_point_method,str):
+                    single_point_methods = [single_point_method]
+                else: 
+                    single_point_methods = single_point_method
                 sp_dir = os.path.join(self.directory,"species",method_name,conformer.smiles,"sp")
                 if not os.path.exists(sp_dir):
                     os.makedirs(sp_dir)
-                if self.sp_calculator is None:
-                    self.sp_calculator = Orca(directory=sp_dir,conformer=conformer,nprocs=nprocs,mem=mem,time=t,partition=partition)
-                else:
-                    if isinstance(self.sp_calculator,Orca):
-                        self.sp_calculator.directory = sp_dir
-                        self.sp_calculator.conformer = conformer
-                        self.sp_calculator.nprocs = nprocs
-                        self.sp_calculator.mem = mem
-                        self.sp_calculator.mem_per_proc = self.sp_calculator.get_mem_per_proc()
-                        self.sp_calculator.time = t
-                        self.sp_calculator.partition = partition
-                        self.sp_calculator.load_conformer_attributes()
 
-                labels = self._generate_sp_inputs(conformer=conformer)
+                currently_running = []
+                processes = {}
+                #for smiles, conformers in list(species.conformers.items()):
+                #for conformers in list(species.conformers[smiles]):
+                
+                for sp_method in single_point_methods:
+                    process = Process(target=self.calculate_sp, args=(conformer,method_name,
+                        sp_method))
+                    processes[process.name] = process
 
-                if labels is not None:
+                # This loop will block until everything in processes 
+                # has been started, and added to currently_running
+                for name, process in list(processes.items()):
+                    process.start()
+                    currently_running.append(name)
 
-                    currently_running = []
-                    processes = {}
-
-                    for label in labels:
-
-                        process = Process(target=self._calculate_sp, args=(
-                                conformer,label))
-                        processes[process.name] = process
-
+                # This loop will block until everything in currently_running
+                # has finished.
+                while len(currently_running) > 0:
                     for name, process in list(processes.items()):
-                        # while len(currently_running) >= 50:
-                        #     for running in currently_running:
-                        #         if not running.is_alive():
-                        #             currently_running.remove(name)
-                        process.start()
-                        currently_running.append(name)
+                        if not (name in currently_running):
+                            continue
+                        if not process.is_alive():
+                            currently_running.remove(name)
+                    time.sleep(15)
 
-                    while len(currently_running) > 0:
-                        for name, process in list(processes.items()):
-                            if not (name in currently_running):
-                                continue
-                            if not process.is_alive():
-                                currently_running.remove(name)
+                if arkane_sp:
+
+                    arkane_dir = os.path.join(
+                    self.directory,
+                    "species",
+                    method_name,
+                    smiles,
+                    'arkane'
+                )
+
+                    if not os.path.exists(arkane_dir):
+                        os.makedirs(arkane_dir)
+
+                    sp_logs = [f for f in os.listdir(sp_dir) if f.endswith('.log') and 'slurm' not in f]
+                    label =  "{}_{}_optfreq".format(smiles,method_name)
+                    log_path = os.path.join(self.directory,"species",method_name,smiles,label+".log")
+                    copyfile(log_path,os.path.join(arkane_dir,label + ".log"))
+                    molecule = self.species.rmg_species[i]
+                    if molecule.toSMILES() != smiles:
+                        for mol in self.species.rmg_species:
+                            if mol.toSMILES() == smiles:
+                                molecule = mol
+                                break
+                    for energy_log in sp_logs:
+                        energy_path = os.path.join(sp_dir,energy_log)
+                        sp_method = energy_log.split('.log')[0].split('_')[-1]
+                        copyfile(energy_path,
+                        os.path.join(arkane_dir,energy_log))
+                        model_chem = method_name + '/' + sp_method
+                        arkane_calc = Arkane_Input(molecule=molecule,modelChemistry=model_chem,directory=arkane_dir,
+                        energy_log_path=energy_path, geometry_log_path=log_path, frequencies_log_path=log_path)
+                        arkane_calc.write_molecule_file()
+                        arkane_calc.write_arkane_input()
+                        subprocess.Popen(
+                            """sbatch --exclude=c5003,c3040 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p test,general,west -N 1 -n 1 -t 10:00 --mem=1GB $RMGpy/Arkane.py arkane_input.py""".format(arkane_calc.label), 
+                            shell=True, cwd=arkane_calc.directory)
+                        time.sleep(10)
+                        while not check_complete(label=arkane_calc.label, user=self.discovery_username):
+                            time.sleep(10)
+
+                        yml_file = os.path.join(arkane_calc.directory,'species','1.yml')
+                        os.remove(os.path.join(arkane_dir,label + ".log"))
+                        os.remove(os.path.join(arkane_dir,energy_log))
+                        dest = os.path.join(
+                            self.directory,
+                            "species",
+                            method_name,
+                            smiles,
+                            smiles + '_' + sp_method + '.yml'
+                        )
+
+                        dest2 = os.path.expandvars(os.path.join('$halogen_data','reference_species',method_name))
+                        if not os.path.exists(dest2):
+                            os.makedirs(dest2)
+
+                        if os.path.exists(yml_file):
+                            copyfile(yml_file,dest)
+                            copyfile(yml_file,os.path.join(dest2,smiles + '_' + sp_method + '.yml'))
+                            copyfile(
+                                os.path.join(self.directory,"species",method_name,smiles,'arkane',smiles+'.py'),
+                                os.path.join(dest2,smiles + '_' + sp_method + '.py')
+                            )
+                            logging.info('Arkane job completed successfully!')
+
+                        else:
+                            logging.info('It appears the arkane job failed or was never run for {}'.format(smiles))
+
+
+        if arkane_dft:
+            ##### run Arkane
+            for i,smiles in enumerate(self.species.smiles):
+                arkane_dir = os.path.join(
+                    self.directory,
+                    "species",
+                    method_name,
+                    smiles,
+                    'arkane'
+                )
+                if not os.path.exists(arkane_dir):
+                    os.makedirs(arkane_dir)
+
+                label =  "{}_{}_optfreq".format(smiles,method_name)
+                log_path = os.path.join(self.directory,"species",method_name,smiles,label+".log")
+                copyfile(log_path,os.path.join(arkane_dir,label + ".log"))
+                molecule = self.species.rmg_species[i]
+                if molecule.toSMILES() != smiles:
+                    for mol in self.species.rmg_species:
+                        if mol.toSMILES() == smiles:
+                            molecule = mol
+                            break
+                arkane_calc = Arkane_Input(molecule=molecule,modelChemistry=method_name,directory=arkane_dir,gaussian_log_path=log_path)
+                arkane_calc.write_molecule_file()
+                arkane_calc.write_arkane_input()
+                subprocess.Popen(
+                    """sbatch --exclude=c5003,c3040 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p test,general,west -N 1 -n 1 -t 10:00 --mem=1GB $RMGpy/Arkane.py arkane_input.py""".format(arkane_calc.label), 
+                    shell=True, cwd=arkane_calc.directory)
+                time.sleep(15)
+                while not check_complete(label=arkane_calc.label, user=self.discovery_username):
+                    time.sleep(10)
+
+                yml_file = os.path.join(arkane_calc.directory,'species','1.yml')
+                os.remove(os.path.join(arkane_dir,label + ".log"))
+                dest = os.path.join(
+                    self.directory,
+                    "species",
+                    method_name,
+                    smiles,
+                    smiles + '.yml'
+                )
+
+
+                dest2 = os.path.expandvars(os.path.join('$halogen_data','reference_species',method_name))
+                if not os.path.exists(dest2):
+                    os.makedirs(dest2)
+
+                if os.path.exists(yml_file):
+                    copyfile(yml_file,dest)
+                    copyfile(yml_file,os.path.join(dest2,smiles + '.yml'))
+                    copyfile(
+                        os.path.join(self.directory,"species",method_name,smiles,smiles + '_fod.log'),
+                        os.path.join(dest2,smiles + '_fod.log')
+                    )  
+                    copyfile(
+                        os.path.join(self.directory,"species",method_name,smiles,smiles + '_' + method_name + '_optfreq.log'),
+                        os.path.join(dest2,smiles + '_' + method_name + '_optfreq.log')
+                    )
+                    copyfile(
+                        os.path.join(self.directory,"species",method_name,smiles,'arkane',smiles+'.py'),
+                        os.path.join(dest2,smiles + '.py')
+                    )
+                    logging.info('Arkane job completed successfully!')
+
                 else:
-                    logging.info('Could not perform single point calcs because single point calculator provided is not currently supported')
-
-        ##### run Arkane
-        for i,smiles in enumerate(self.species.smiles):
-            arkane_dir = os.path.join(
-                self.directory,
-                "species",
-                method_name,
-                smiles,
-                'arkane'
-            )
-            if not os.path.exists(arkane_dir):
-                os.makedirs(arkane_dir)
-
-            label =  "{}_{}_optfreq".format(smiles,method_name)
-            log_path = os.path.join(self.directory,"species",method_name,smiles,label+".log")
-            copyfile(log_path,os.path.join(arkane_dir,label + ".log"))
-            molecule = self.species.rmg_species[i]
-            if molecule.toSMILES() != smiles:
-                for mol in self.species.rmg_species:
-                    if mol.toSMILES() == smiles:
-                        molecule = mol
-                        break
-            arkane_calc = Arkane_Input(molecule=molecule,modelChemistry=method_name,directory=arkane_dir,gaussian_log_path=log_path)
-            arkane_calc.write_molecule_file()
-            arkane_calc.write_arkane_input()
-            subprocess.Popen(
-                """sbatch --exclude=c5003,c3040 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p test -N 1 -n 1 -t 10:00 --mem=1GB $RMGpy/Arkane.py arkane_input.py""".format(arkane_calc.label), 
-                shell=True, cwd=arkane_calc.directory)
-            time.sleep(15)
-            while not check_complete(label=arkane_calc.label, user=self.discovery_username, partition='test'):
-                time.sleep(10)
-
-            yml_file = os.path.join(arkane_calc.directory,'species','1.yml')
-            os.remove(os.path.join(arkane_dir,label + ".log"))
-            dest = os.path.join(
-                self.directory,
-                "species",
-                method_name,
-                smiles,
-                smiles + '.yml'
-            )
-
-
-            dest2 = os.path.expandvars(os.path.join('$halogen_data','reference_species',method_name))
-            if not os.path.exists(dest2):
-                os.makedirs(dest2)
-
-            if os.path.exists(yml_file):
-                copyfile(yml_file,dest)
-                copyfile(yml_file,os.path.join(dest2,smiles + '.yml'))
-                copyfile(
-                    os.path.join(self.directory,"species",method_name,smiles,smiles + '_fod.log'),
-                    os.path.join(dest2,smiles + '_fod.log')
-                )  
-                copyfile(
-                    os.path.join(self.directory,"species",method_name,smiles,smiles + '_' + method_name + '_optfreq.log'),
-                    os.path.join(dest2,smiles + '_' + method_name + '_optfreq.log')
-                )
-                copyfile(
-                    os.path.join(self.directory,"species",method_name,smiles,'arkane',smiles+'.py'),
-                    os.path.join(dest2,smiles + '.py')
-                )
-                logging.info('Arkane job completed successfully!')
-
-            else:
-                logging.info('It appears the arkane job failed or was never run for {}'.format(smiles))
+                    logging.info('It appears the arkane job failed or was never run for {}'.format(smiles))
 
 
 
 
-        
+            
 
