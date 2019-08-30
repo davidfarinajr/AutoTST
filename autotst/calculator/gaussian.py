@@ -380,7 +380,7 @@ class Gaussian():
             scratch=new_scratch,
             method= method,
             basis = '',
-            extra="SP",
+            extra="",
             multiplicity=self.conformer.rmg_molecule.multiplicity)
         ase_gaussian.atoms = self.conformer.ase_molecule
         ase_gaussian.directory = new_scratch
