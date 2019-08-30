@@ -148,6 +148,7 @@ class VibrationalAnalysis():
 
         
         symbol_dict = {
+            53: "I",
             35: "Br",
             17: "Cl",
             9:  "F",

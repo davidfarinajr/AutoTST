@@ -94,6 +94,8 @@ class VibrationalAnalysisTest(unittest.TestCase):
         vibrations = self.vibrational_analysis.parse_vibrations()
 
         symbol_dict = {
+            53: "I",
+            35: "Br",
             17: "Cl",
             9:  "F",
             8:  "O",
