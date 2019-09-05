@@ -294,7 +294,7 @@ class Gaussian():
         assert isinstance(
             self.conformer, Conformer), "A Conformer object was not provided..."
 
-        self.conformer.rmg_molecule.updateMultiplicity()
+        #self.conformer.rmg_molecule.updateMultiplicity()
 
         label = "{}_{}_{}_optfreq".format(self.conformer.smiles, self.conformer.index, method_name)
 
