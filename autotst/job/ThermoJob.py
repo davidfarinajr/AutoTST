@@ -590,8 +590,10 @@ class ThermoJob():
                 log = os.path.join(self.calculator.directory,"species",method_name,conformer.smiles,label+"_optfreq.log")
                 assert os.path.exists(log),"It appears the calculation failed for {}...cannot calculate fod".format(conformer.smiles)
                 atoms = read_log(log)
+                mult = ccread(log).mult
                 conformer.ase_molecule = atoms
                 conformer.update_coords_from("ase")
+                conformer.rmg_molecule.multiplicity = mult
                 self._calculate_fod(conformer=conformer,method_name=method_name)
 
         if single_point_method:
@@ -602,8 +604,10 @@ class ThermoJob():
                 log = os.path.join(self.directory,"species",method_name,conformer.smiles,label+"_optfreq.log")
                 assert os.path.exists(log), "It appears the calculation failed for {}...cannot perform single point calculations".format(conformer.smiles)
                 atoms = read_log(log)
+                mult = ccread(log).mult
                 conformer.ase_molecule = atoms
                 conformer.update_coords_from("ase")
+                conformer.rmg_molecule.multiplicity = mult
 
                 if isinstance(single_point_method,str):
                     single_point_methods = [single_point_method]
@@ -657,6 +661,7 @@ class ThermoJob():
                         if not complete:
                             logging.info("It seems the log file {} is incomplete".format(log_path))
                             continue
+                        mult = ccread(log_path).mult
                         #sp_log = [f for f in os.listdir(sp_dir) if f.endswith('.log') and ('slurm' not in f) and (sp_method in f)]
                         #label =  "{}_{}_optfreq".format(smiles,method_name)
                         # log_path = os.path.join(self.directory,"species",method_name,smiles,label+".log")
@@ -667,7 +672,7 @@ class ThermoJob():
                                 if mol.toSMILES() == smiles:
                                     molecule = mol
                                     break
-    
+                        molecule.multiplicity = mult
                         copyfile(log_path,
                         os.path.join(arkane_dir,label+'.log'))
                         model_chem = sp_method
@@ -716,6 +721,7 @@ class ThermoJob():
 
                 label =  "{}_{}_optfreq".format(smiles,method_name)
                 log_path = os.path.join(self.directory,"species",method_name,smiles,label+".log")
+                mult = ccread(log_path).mult
                 copyfile(log_path,os.path.join(arkane_dir,label + ".log"))
                 molecule = self.species.rmg_species[i]
                 if molecule.toSMILES() != smiles:
@@ -723,6 +729,7 @@ class ThermoJob():
                         if mol.toSMILES() == smiles:
                             molecule = mol
                             break
+                molecule.multiplicity = mult
                 arkane_calc = Arkane_Input(molecule=molecule,modelChemistry=method_name,directory=arkane_dir,gaussian_log_path=log_path)
                 arkane_calc.write_molecule_file()
                 arkane_calc.write_arkane_input()
