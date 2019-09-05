@@ -696,7 +696,7 @@ class ThermoJob():
                         if os.path.exists(yml_file):
                             copyfile(yml_file,os.path.join(dest,smiles + '.yml'))
                             copyfile(
-                                os.path.join(self.directory,"species",method_name,smiles,'arkane',smiles+'.py'),
+                                os.path.join(self.directory,"species",method_name,smiles,'sp','arkane',smiles+'.py'),
                                 os.path.join(dest,smiles + '.py')
                             )
                             logging.info('Arkane job completed successfully!')
