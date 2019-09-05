@@ -314,9 +314,10 @@ def systematic_search(conformer,
     i = 0
     for conf in df.conformer:
         for mult in mulitplicities:
-            conf.index = i
-            conf.rmg_molecule.multiplicity = mult
+            conf_copy = conf.copy()
+            conf_copy.index = i
+            conf_copy.rmg_molecule.multiplicity = mult
+            confs.append(conf_copy)
             i += 1
-            confs.append(conf)
     
     return confs
