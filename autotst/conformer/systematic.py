@@ -79,20 +79,6 @@ def find_all_combos(
     torsion_combos = list(itertools.product(
         torsion_angles, repeat=len(torsions)))
 
-    if conformer.rmg_molecule.multiplicity > 2:
-        mulitplicities = []
-        rads_unpaired = [atom.radicalElectrons for atom in conformer.rmg_molecule.getRadicalAtoms()]
-        rads_paired = [r % 2 for r in rads_unpaired]
-        radical_combos = [r for r in itertools.product(range(2),repeat=len(rads_unpaired))]
-        for combo in radical_combos:
-            mult = 1
-            for x in zip(rads_unpaired,rads_paired,combo):
-                mult += x[x[-1]]
-            mulitplicities.append(mult)
-        mulitplicities = list(set(mulitplicities))
-    else:
-        mulitplicities = [conformer.rmg_molecule.multiplicity]
-
     if cistrans:
         cistrans_options = ["E", "Z"]
         cistrans_combos = list(itertools.product(
@@ -111,7 +97,6 @@ def find_all_combos(
 
     all_combos = list(
         itertools.product(
-            mulitplicities,
             torsion_combos,
             cistrans_combos,
             chiral_combos))
@@ -162,9 +147,7 @@ def systematic_search(conformer,
 
         combinations[index] = combo
 
-        mult, torsions, cistrans, chiral_centers = combo
-
-        conformer.rmg_molecule.multiplicity = mult
+        torsions, cistrans, chiral_centers = combo
 
         for i, torsion in enumerate(torsions):
 
@@ -313,11 +296,27 @@ def systematic_search(conformer,
     logging.info("We have identified {} unique conformers for {}".format(
         len(df.conformer), conformer))
 
+    if conformer.rmg_molecule.multiplicity > 2:
+        mulitplicities = []
+        rads_unpaired = [atom.radicalElectrons for atom in conformer.rmg_molecule.getRadicalAtoms()]
+        rads_paired = [r % 2 for r in rads_unpaired]
+        radical_combos = [r for r in itertools.product(range(2),repeat=len(rads_unpaired))]
+        for combo in radical_combos:
+            mult = 1
+            for x in zip(rads_unpaired,rads_paired,combo):
+                mult += x[x[-1]]
+            mulitplicities.append(mult)
+        mulitplicities = list(set(mulitplicities))
+    else:
+        mulitplicities = [conformer.rmg_molecule.multiplicity]
+
     confs = []
     i = 0
     for conf in df.conformer:
-        conf.index = i
-        confs.append(conf)
-        i += 1
+        for mult in mulitplicities:
+            conf.index = i
+            conf.rmg_molecule.multiplicity = mult
+            i += 1
+            confs.append(conf)
     
     return confs
