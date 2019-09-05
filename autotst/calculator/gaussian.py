@@ -339,14 +339,13 @@ class Gaussian():
         assert method in gaussian_methods
 
         self.settings["time"] = "24:00:00"
-        if "W" in method:
-            self.settings["mem"] = '100GB'
-            self.settings["nprocshared"] = 18
-        else:
-            self.settings["mem"] = '80GB'
-            self.settings["nprocshared"] = 12
+        self.settings["mem"] = '110GB'
+        self.settings["nprocshared"] = 16
+        # if "W" in method:
+        #     self.settings["nprocshared"] = 18
+        # else:
+        #     self.settings["nprocshared"] = 12
             
-        
         if isinstance(self.conformer, TS):
             logging.info(
                 "TS object provided, cannot obtain a species calculator for a TS")
