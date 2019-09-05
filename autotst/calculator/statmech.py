@@ -36,6 +36,7 @@ from cclib.io import ccread
 
 from autotst.reaction import Reaction, TS
 from autotst.species import Species, Conformer
+from shutil import copyfile
 
 FORMAT = "%(filename)s:%(lineno)d %(funcName)s %(levelname)s %(message)s"
 logging.basicConfig(format=FORMAT, level=logging.INFO)
@@ -48,7 +49,7 @@ class StatMech():
             reaction,
             directory=".",
             model_chemistry="M06-2X/cc-pVTZ",
-            freq_scale_factor=0.982):
+            freq_scale_factor=0.955):
         """
         A class to perform Arkane calculations:
         :param: reaction: (Reaction) The reaction of interest
@@ -222,22 +223,22 @@ class StatMech():
         conformer.update_coords_from("ase")
         mol = conformer.rmg_molecule
         output = ['#!/usr/bin/env python',
-                  '# -*- coding: utf-8 -*-', '', 'atoms = {']
+                  '# -*- coding: utf-8 -*-']#, '', 'atoms = {']
 
-        atom_dict = self.get_atoms(conformer=conformer)  # Fix this
+        # atom_dict = self.get_atoms(conformer=conformer)  # Fix this
 
-        for atom, count in atom_dict.items():
-            output.append("    '{0}': {1},".format(atom, count))
-        output = output + ['}', '']
+        # for atom, count in atom_dict.items():
+        #     output.append("    '{0}': {1},".format(atom, count))
+        # output = output + ['}', '']
 
-        bond_dict = self.get_bonds(conformer=conformer) 
-        if bond_dict != {}:
-            output.append('bonds = {')
-            for bond_type, num in bond_dict.items():
-                output.append("    '{0}': {1},".format(bond_type, num))
-            output.append("}")
-        else:
-            output.append('bonds = {}')
+        # bond_dict = self.get_bonds(conformer=conformer) 
+        # if bond_dict != {}:
+        #     output.append('bonds = {')
+        #     for bond_type, num in bond_dict.items():
+        #         output.append("    '{0}': {1},".format(bond_type, num))
+        #     output.append("}")
+        # else:
+        #     output.append('bonds = {}')
 
         external_symmetry = conformer.calculate_symmetry_number()
 
@@ -358,6 +359,7 @@ class StatMech():
         parser = ccread(os.path.join(self.directory, "ts", label,
                                      label + ".log"), loglevel=logging.ERROR)
         symbol_dict = {
+            35: "Br",
             17: "Cl",
             9:  "F",
             8:  "O",
@@ -374,23 +376,23 @@ class StatMech():
         transitionstate.update_coords_from("ase")
 
         output = ['#!/usr/bin/env python',
-                  '# -*- coding: utf-8 -*-', '', 'atoms = {']
+                  '# -*- coding: utf-8 -*-']# '', 'atoms = {']
 
-        atom_dict = self.get_atoms(conformer=transitionstate)  # need to fix
+        # atom_dict = self.get_atoms(conformer=transitionstate)  # need to fix
 
-        for atom, count in atom_dict.items():
-            output.append("    '{0}': {1},".format(atom, count))
-        output = output + ['}', '']
+        # for atom, count in atom_dict.items():
+        #     output.append("    '{0}': {1},".format(atom, count))
+        # output = output + ['}', '']
 
-        bond_dict = self.get_bonds(conformer=transitionstate)  # need to fix
-        if bond_dict != {}:
-            output.append('bonds = {')
-            for bond_type, num in bond_dict.items():
-                output.append("    '{0}': {1},".format(bond_type, num))
+        # bond_dict = self.get_bonds(conformer=transitionstate)  # need to fix
+        # if bond_dict != {}:
+        #     output.append('bonds = {')
+        #     for bond_type, num in bond_dict.items():
+        #         output.append("    '{0}': {1},".format(bond_type, num))
 
-            output.append("}")
-        else:
-            output.append('bonds = {}')
+        #     output.append("}")
+        # else:
+        #     output.append('bonds = {}')
         transitionstate.rmg_molecule.updateMultiplicity()
 
         external_symmetry = transitionstate.calculate_symmetry_number()
@@ -447,6 +449,7 @@ class StatMech():
                 self.freq_scale_factor),  # fix this
             "useHinderedRotors = False",  # fix this @carl
             "useBondCorrections = False",
+            "useAtomCorrections = False",
             ""]
 
         labels = []
@@ -564,8 +567,13 @@ class StatMech():
         for t in top:
             input_string += t + "\n"
 
-        with open(os.path.join(self.directory, "ts", self.reaction.label, self.reaction.label + ".kinetics.py"), "w") as f:
+        file_path = os.path.join(self.directory, "ts", self.reaction.label, self.reaction.label + ".kinetics.py")
+        with open(file_path, "w") as f:
             f.write(input_string)
+
+        copyfile(file_path,
+                os.path.join(self.directory,self.reaction.label + ".kinetics.py")
+                )
 
     def write_thermo_input(self, conformer):
         """
@@ -646,8 +654,9 @@ class StatMech():
         - None
         """
 
-        self.kinetics_job.inputFile = os.path.join(
-            self.directory, "ts", self.reaction.label, self.reaction.label + ".kinetics.py")
+        # self.kinetics_job.inputFile = os.path.join(
+        #     self.directory, "ts", self.reaction.label, self.reaction.label + ".kinetics.py")
+        self.kinetics_job.inputFile = os.path.join(self.directory,self.reaction.label + ".kinetics.py")
         self.kinetics_job.plot = False
         self.kinetics_job.outputDirectory = os.path.join(self.directory, "ts", self.reaction.label)
 
