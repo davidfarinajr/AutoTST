@@ -320,7 +320,7 @@ class ThermoJob():
         logging.info(
             "Submitting {} calculation".format(calc.label))
         label = self._submit_conformer(conformer,calc)
-        time.sleep(15)
+        time.sleep(10)
         while not check_complete(label=label,user=self.discovery_username):
             time.sleep(15)
 
@@ -328,10 +328,24 @@ class ThermoJob():
 
         if (not complete) or (not os.path.exists(log_path)):
             logging.info(
+                "It seems that the file never completed for {} completed, running it again".format(calc.label))
+            calc.parameters["time"] = "24:00:00"
+            calc.parameters["nprocshared"] = 20
+            calc.parameters["mem"] = "120Gb"
+            label = self._submit_conformer(conformer,calc,restart=True)
+            time.sleep(10)
+            while not check_complete(label=label,user=self.discovery_username):
+                time.sleep(15)
+
+            complete, _ = self.calculator.verify_output_file(log_path)
+            if not complete:
+                logging.info(
                 "It seems that the file never completed for {}".format(calc.label))
-            return False
-        else:
+                return False
+
+        if complete:
             return True
+
 
     def _calculate_fod(self,conformer,method_name):
         """
@@ -601,8 +615,6 @@ class ThermoJob():
 
                 currently_running = []
                 processes = {}
-                #for smiles, conformers in list(species.conformers.items()):
-                #for conformers in list(species.conformers[smiles]):
                 
                 for sp_method in single_point_methods:
                     process = Process(target=self.calculate_sp, args=(conformer,method_name,
@@ -626,36 +638,41 @@ class ThermoJob():
                     time.sleep(15)
 
                 if arkane_sp:
-
+                    
                     arkane_dir = os.path.join(
                     self.directory,
                     "species",
                     method_name,
                     smiles,
+                    'sp',
                     'arkane'
                 )
 
                     if not os.path.exists(arkane_dir):
                         os.makedirs(arkane_dir)
-
-                    sp_logs = [f for f in os.listdir(sp_dir) if f.endswith('.log') and 'slurm' not in f]
-                    label =  "{}_{}_optfreq".format(smiles,method_name)
-                    log_path = os.path.join(self.directory,"species",method_name,smiles,label+".log")
-                    copyfile(log_path,os.path.join(arkane_dir,label + ".log"))
-                    molecule = self.species.rmg_species[i]
-                    if molecule.toSMILES() != smiles:
-                        for mol in self.species.rmg_species:
-                            if mol.toSMILES() == smiles:
-                                molecule = mol
-                                break
-                    for energy_log in sp_logs:
-                        energy_path = os.path.join(sp_dir,energy_log)
-                        sp_method = energy_log.split('.log')[0].split('_')[-1]
-                        copyfile(energy_path,
-                        os.path.join(arkane_dir,energy_log))
-                        model_chem = method_name + '/' + sp_method
+                    for sp_method in single_point_methods:
+                        label = smiles + '_' + sp_method
+                        log_path = os.path.join(sp_dir,label + '.log')
+                        complete, _ = self.calculator.verify_output_file(log_path)
+                        if not complete:
+                            logging.info("It seems the log file {} is incomplete".format(log_path))
+                            continue
+                        #sp_log = [f for f in os.listdir(sp_dir) if f.endswith('.log') and ('slurm' not in f) and (sp_method in f)]
+                        #label =  "{}_{}_optfreq".format(smiles,method_name)
+                        # log_path = os.path.join(self.directory,"species",method_name,smiles,label+".log")
+                        # copyfile(log_path,os.path.join(arkane_dir,label + ".log"))
+                        molecule = self.species.rmg_species[0]
+                        if molecule.toSMILES() != smiles:
+                            for mol in self.species.rmg_species:
+                                if mol.toSMILES() == smiles:
+                                    molecule = mol
+                                    break
+    
+                        copyfile(log_path,
+                        os.path.join(arkane_dir,label+'.log'))
+                        model_chem = sp_method
                         arkane_calc = Arkane_Input(molecule=molecule,modelChemistry=model_chem,directory=arkane_dir,
-                        energy_log_path=energy_path, geometry_log_path=log_path, frequencies_log_path=log_path)
+                        gaussian_log_path=log_path)
                         arkane_calc.write_molecule_file()
                         arkane_calc.write_arkane_input()
                         subprocess.Popen(
@@ -667,25 +684,16 @@ class ThermoJob():
 
                         yml_file = os.path.join(arkane_calc.directory,'species','1.yml')
                         os.remove(os.path.join(arkane_dir,label + ".log"))
-                        os.remove(os.path.join(arkane_dir,energy_log))
-                        dest = os.path.join(
-                            self.directory,
-                            "species",
-                            method_name,
-                            smiles,
-                            smiles + '_' + sp_method + '.yml'
-                        )
 
-                        dest2 = os.path.expandvars(os.path.join('$halogen_data','reference_species',method_name))
-                        if not os.path.exists(dest2):
-                            os.makedirs(dest2)
+                        dest = os.path.expandvars(os.path.join('$halogen_data','reference_species',sp_method))
+                        if not os.path.exists(dest):
+                            os.makedirs(dest)
 
                         if os.path.exists(yml_file):
-                            copyfile(yml_file,dest)
-                            copyfile(yml_file,os.path.join(dest2,smiles + '_' + sp_method + '.yml'))
+                            copyfile(yml_file,os.path.join(dest,smiles + '.yml'))
                             copyfile(
                                 os.path.join(self.directory,"species",method_name,smiles,'arkane',smiles+'.py'),
-                                os.path.join(dest2,smiles + '_' + sp_method + '.py')
+                                os.path.join(dest,smiles + '.py')
                             )
                             logging.info('Arkane job completed successfully!')
 
