@@ -590,7 +590,7 @@ class ThermoJob():
                 log = os.path.join(self.calculator.directory,"species",method_name,conformer.smiles,label+"_optfreq.log")
                 assert os.path.exists(log),"It appears the calculation failed for {}...cannot calculate fod".format(conformer.smiles)
                 atoms = read_log(log)
-                mult = ccread(log).mult
+                mult = ccread(log,loglevel=logging.ERROR).mult
                 conformer.ase_molecule = atoms
                 conformer.update_coords_from("ase")
                 conformer.rmg_molecule.multiplicity = mult
@@ -604,7 +604,7 @@ class ThermoJob():
                 log = os.path.join(self.directory,"species",method_name,conformer.smiles,label+"_optfreq.log")
                 assert os.path.exists(log), "It appears the calculation failed for {}...cannot perform single point calculations".format(conformer.smiles)
                 atoms = read_log(log)
-                mult = ccread(log).mult
+                mult = ccread(log,loglevel=logging.ERROR).mult
                 conformer.ase_molecule = atoms
                 conformer.update_coords_from("ase")
                 conformer.rmg_molecule.multiplicity = mult
@@ -661,7 +661,6 @@ class ThermoJob():
                         if not complete:
                             logging.info("It seems the log file {} is incomplete".format(log_path))
                             continue
-                        mult = ccread(log_path).mult
                         #sp_log = [f for f in os.listdir(sp_dir) if f.endswith('.log') and ('slurm' not in f) and (sp_method in f)]
                         #label =  "{}_{}_optfreq".format(smiles,method_name)
                         # log_path = os.path.join(self.directory,"species",method_name,smiles,label+".log")
@@ -721,7 +720,7 @@ class ThermoJob():
 
                 label =  "{}_{}_optfreq".format(smiles,method_name)
                 log_path = os.path.join(self.directory,"species",method_name,smiles,label+".log")
-                mult = ccread(log_path).mult
+                mult = ccread(log_path,loglevel=logging.ERROR).mult
                 copyfile(log_path,os.path.join(arkane_dir,label + ".log"))
                 molecule = self.species.rmg_species[i]
                 if molecule.toSMILES() != smiles:
