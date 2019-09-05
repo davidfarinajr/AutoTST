@@ -106,7 +106,7 @@ class Gaussian():
                      "mem": "5GB",
                      "nprocshared": 20,
                      "time": "12:00:00",
-                     "partition": 'general'
+                     "partition": 'general,west'
                  },
                  convergence="",
                  directory=".", #where you want input and log files to be written, default is current directory
