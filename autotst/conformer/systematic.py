@@ -79,12 +79,24 @@ def find_all_combos(
     torsion_combos = list(itertools.product(
         torsion_angles, repeat=len(torsions)))
 
+    if conformer.rmg_molecule.multiplicity > 2:
+        mulitplicities = []
+        rads_unpaired = [atom.radicalElectrons for atom in conformer.rmg_molecule.getRadicalAtoms()]
+        rads_paired = [r % 2 for r in rads_unpaired]
+        radical_combos = [r for r in itertools.product(range(2),repeat=len(rads_unpaired))]
+        for combo in radical_combos:
+            mult = 1
+            for x in zip(rads_unpaired,rads_paired,combo):
+                mult += x[x[-1]]
+            mulitplicities.append(mult)
+        mulitplicities = list(set(mulitplicities))
+    else:
+        mulitplicities = [conformer.rmg_molecule.multiplicity]
+
     if cistrans:
         cistrans_options = ["E", "Z"]
         cistrans_combos = list(itertools.product(
             cistrans_options, repeat=len(cistranss)))
-
-
 
     else:
         cistrans_combos = [()]
@@ -99,6 +111,7 @@ def find_all_combos(
 
     all_combos = list(
         itertools.product(
+            mulitplicities,
             torsion_combos,
             cistrans_combos,
             chiral_combos))
@@ -149,7 +162,9 @@ def systematic_search(conformer,
 
         combinations[index] = combo
 
-        torsions, cistrans, chiral_centers = combo
+        mult, torsions, cistrans, chiral_centers = combo
+
+        conformer.rmg_molecule.multiplicity = mult
 
         for i, torsion in enumerate(torsions):
 
