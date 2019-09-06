@@ -297,16 +297,11 @@ def systematic_search(conformer,
         len(df.conformer), conformer))
 
     if conformer.rmg_molecule.multiplicity > 2:
-        mulitplicities = []
-        rads_unpaired = [atom.radicalElectrons for atom in conformer.rmg_molecule.getRadicalAtoms()]
-        rads_paired = [r % 2 for r in rads_unpaired]
-        radical_combos = [r for r in itertools.product(range(2),repeat=len(rads_unpaired))]
-        for combo in radical_combos:
-            mult = 1
-            for x in zip(rads_unpaired,rads_paired,combo):
-                mult += x[x[-1]]
-            mulitplicities.append(mult)
-        mulitplicities = list(set(mulitplicities))
+        rads = conformer.rdkit_molecule.getRadicalCount()
+        if rads % 2 == 0:
+            mulitplicities = range(1,rads+2,2)
+        else:
+            mulitplicities = range(2,rads+2,2)
     else:
         mulitplicities = [conformer.rmg_molecule.multiplicity]
 
