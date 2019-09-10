@@ -122,6 +122,89 @@ def systematic_search(conformer,
     """
     # Takes each of the molecule objects
 
+    reference_mol = conformer.rmg_molecule.copy(deep=True)
+    reference_mol = reference_mol.toSingleBonds()
+
+    def opt_conf(conformer, calculator, i):
+        """
+        A helper function to optimize the geometry of a conformer.
+        Only for use within this parent function
+        """
+
+        labels = []
+        for bond in conformer.get_bonds():
+            labels.append(bond.atom_indices)
+    
+        if isinstance(conformer, TS):
+            label = conformer.reaction_label
+            ind1 = conformer.rmg_molecule.getLabeledAtom("*1").sortingLabel
+            ind2 = conformer.rmg_molecule.getLabeledAtom("*3").sortingLabel
+            labels.append([ind1, ind2])
+            type = 'ts'
+        else:
+            label = conformer.smiles
+            type = 'species'
+
+        if isinstance(calc, FileIOCalculator):
+            if calculator.directory:
+                directory = calculator.directory 
+            else: 
+                directory = 'conformer_logs'
+            calculator.label = "{}_{}".format(conformer.smiles, i)
+            calculator.directory = os.path.join(directory, label,'{}_{}'.format(conformer.smiles, i))
+            if not os.path.exists(calculator.directory):
+                try:
+                    os.makedirs(calculator.directory)
+                except OSError:
+                    logging.info("An error occured when creating {}".format(calculator.directory))
+
+            calculator.atoms = conformer.ase_molecule
+
+        conformer.ase_molecule.set_calculator(calculator)
+        opt = BFGS(conformer.ase_molecule, logfile=None)
+
+        if type == 'species':
+            if isinstance(i,int):
+                c = FixBondLengths(labels)
+                conformer.ase_molecule.set_constraint(c)
+            try:
+                opt.run(steps=1e6)
+            except RuntimeError:
+                logging.info("Optimization failed...we will use the unconverged geometry")
+                pass
+        
+        if type == 'ts':
+            c = FixBondLengths(labels)
+            conformer.ase_molecule.set_constraint(c)
+            try:
+                opt.run(fmax=0.20, steps=1e6)
+            except RuntimeError:
+                logging.info("Optimization failed...we will use the unconverged geometry")
+                pass
+            
+        conformer.update_coords_from("ase")
+        rmg_mol = conformer.rmg_molecule.copy(deep=True)
+        rmg_mol = rmg_mol.toSingleBonds()
+        if not rmg_mol.isIsomorphic(reference_mol):
+            logging.info("{} if not isomorphic with reference mol")
+            return False
+
+        energy = get_energy(conformer)
+        conformer.energy = energy
+        if len(return_dict)>0:
+            conformer_copy = conformer.copy()
+            for index,conf in return_dict.items():
+                conf_copy = conf.copy()
+                rmsd = rdMolAlign.GetBestRMS(conformer_copy.rdkit_molecule,conf_copy.rdkit_molecule)
+                if rmsd <= 1.0:
+                    return True
+        return_dict[i] = conformer
+        return True
+
+    reference_conformer = conformer.copy()
+    if opt_conf(reference_conformer, calculator, 'ref'):
+        conformer = reference_conformer
+
     combos = find_all_combos(
         conformer,
         delta=delta,
@@ -179,71 +262,7 @@ def systematic_search(conformer,
 
     logging.info(
         "There are {} unique conformers generated".format(len(conformers)))
-
-    def opt_conf(conformer, calculator, i):
-        """
-        A helper function to optimize the geometry of a conformer.
-        Only for use within this parent function
-        """
-
-        if isinstance(conformer, TS):
-            labels = []
-            for bond in conformer.get_bonds():
-                labels.append(bond.atom_indices)
-            label = conformer.reaction_label
-            ind1 = conformer.rmg_molecule.getLabeledAtom("*1").sortingLabel
-            ind2 = conformer.rmg_molecule.getLabeledAtom("*3").sortingLabel
-            labels.append([ind1, ind2])
-            type = 'ts'
-        else:
-            label = conformer.smiles
-            type = 'species'
-
-        if isinstance(calc, FileIOCalculator):
-            if calculator.directory:
-                directory = calculator.directory 
-            else: 
-                directory = 'conformer_logs'
-            calculator.label = "{}_{}".format(conformer.smiles, i)
-            calculator.directory = os.path.join(directory, label,'{}_{}'.format(conformer.smiles, i))
-            if not os.path.exists(calculator.directory):
-                try:
-                    os.makedirs(calculator.directory)
-                except OSError:
-                    logging.info("An error occured when creating {}".format(calculator.directory))
-
-            calculator.atoms = conformer.ase_molecule
-
-        conformer.ase_molecule.set_calculator(calculator)
-        opt = BFGS(conformer.ase_molecule, logfile=None)
-
-        if type == 'species':
-            try:
-                opt.run(steps=100)
-            except RuntimeError:
-                logging.info("Optimization failed...we will use the unconverged geometry")
-                pass
         
-        if type == 'ts':
-            c = FixBondLengths(labels)
-            conformer.ase_molecule.set_constraint(c)
-            try:
-                opt.run(fmax=0.20, steps=1e6)
-            except RuntimeError:
-                logging.info("Optimization failed...we will use the unconverged geometry")
-                pass
-            
-        conformer.update_coords_from("ase")
-        energy = get_energy(conformer)
-        conformer.energy = energy
-        if len(return_dict)>0:
-            for index,conf in return_dict.items():
-                rmsd = rdMolAlign.GetBestRMS(conformer.rdkit_molecule,conf.rdkit_molecule)
-                if rmsd <= 1.2:
-                    return
-        return_dict[i] = conformer
-        
-
     manager = Manager()
     return_dict = manager.dict()
 
