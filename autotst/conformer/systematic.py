@@ -316,18 +316,18 @@ def systematic_search(conformer,
         len(df.conformer), conformer))
 
     if conformer.rmg_molecule.multiplicity > 2:
-        rads = conformer.rdkit_molecule.getRadicalCount()
+        rads = conformer.rmg_molecule.getRadicalCount()
         if rads % 2 == 0:
-            mulitplicities = range(1,rads+2,2)
+            multiplicities = range(1,rads+2,2)
         else:
-            mulitplicities = range(2,rads+2,2)
+            multiplicities = range(2,rads+2,2)
     else:
-        mulitplicities = [conformer.rmg_molecule.multiplicity]
+        multiplicities = [conformer.rmg_molecule.multiplicity]
 
     confs = []
     i = 0
     for conf in df.conformer:
-        for mult in mulitplicities:
+        for mult in multiplicities:
             conf_copy = conf.copy()
             conf_copy.index = i
             conf_copy.rmg_molecule.multiplicity = mult
