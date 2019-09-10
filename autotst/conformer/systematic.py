@@ -306,9 +306,10 @@ def systematic_search(conformer,
 
     redundant = []
     for i,j in itertools.combinations(range(len(df.conformer)),2):
-        rmsd = rdMolAlign.GetBestRMS(df.conformer[i].rdkit_molecule,df.conformer[j].rdkit_molecule)
-        if rmsd <= 1.2:
-            print i,j,rmsd
+        copy_1 = df.conformer[i].copy()
+        copy_2 = df.conformer[j].copy()
+        rmsd = rdMolAlign.GetBestRMS(copy_1.rdkit_molecule,copy_2.rdkit_molecule)
+        if rmsd <= 1.0:
             redundant.append(j)
 
     redundant = list(set(redundant))
