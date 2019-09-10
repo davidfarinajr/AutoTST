@@ -198,7 +198,8 @@ def systematic_search(conformer,
                 rmsd = rdMolAlign.GetBestRMS(conformer_copy.rdkit_molecule,conf_copy.rdkit_molecule)
                 if rmsd <= 1.0:
                     return True
-        return_dict[i] = conformer
+        if str(i) != 'ref':
+            return_dict[i] = conformer
         return True
 
     calc = conformer.ase_molecule.get_calculator()
