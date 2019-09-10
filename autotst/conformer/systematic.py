@@ -202,6 +202,7 @@ def systematic_search(conformer,
         return True
 
     calc = conformer.ase_molecule.get_calculator()
+    reference_conformer = conformer.copy()
     if opt_conf(reference_conformer, calc, 'ref'):
         conformer = reference_conformer
 
