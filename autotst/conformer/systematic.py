@@ -202,9 +202,7 @@ def systematic_search(conformer,
         return True
 
     calc = conformer.ase_molecule.get_calculator()
-    reference_conformer = conformer.copy()
-    reference_conformer.ase_molecule.set_calculator(calc)
-    if opt_conf(reference_conformer, calculator, 'ref'):
+    if opt_conf(reference_conformer, calc, 'ref'):
         conformer = reference_conformer
 
     combos = find_all_combos(
