@@ -124,6 +124,8 @@ def systematic_search(conformer,
 
     reference_mol = conformer.rmg_molecule.copy(deep=True)
     reference_mol = reference_mol.toSingleBonds()
+    manager = Manager()
+    return_dict = manager.dict()
 
     def opt_conf(conformer, calculator, i):
         """
@@ -264,9 +266,6 @@ def systematic_search(conformer,
 
     logging.info(
         "There are {} unique conformers generated".format(len(conformers)))
-        
-    manager = Manager()
-    return_dict = manager.dict()
 
     processes = []
     for i, conf in list(conformers.items()):
