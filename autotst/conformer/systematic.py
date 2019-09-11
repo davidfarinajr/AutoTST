@@ -39,7 +39,7 @@ import ase
 from ase import Atoms
 from ase import calculators
 from ase.calculators.calculator import FileIOCalculator
-from ase.optimize import BFGS
+from ase.optimize import LBFGS
 from ase import units
 from ase.constraints import FixBondLengths
 
@@ -107,8 +107,11 @@ def find_all_combos(
 
 def systematic_search(conformer,
                       delta=float(120),
-                      cistrans=True,
-                      chiral_centers=True,
+                      energy_cutoff = 10.0, #kcal/mol
+                      rmsd_cutoff = 1.0, #angstroms
+                      cistrans = True,
+                      chiral_centers = True,
+                      multiplicity = True
                       ):
     """
     Perfoms a systematic conformer analysis of a `Conformer` or a `TS` object
@@ -129,7 +132,7 @@ def systematic_search(conformer,
     manager = Manager()
     return_dict = manager.dict()
 
-    def opt_conf(conformer, calculator, i):
+    def opt_conf(conformer, calculator, i, rmsd_cutoff):
         """
         A helper function to optimize the geometry of a conformer.
         Only for use within this parent function
@@ -165,7 +168,7 @@ def systematic_search(conformer,
             calculator.atoms = conformer.ase_molecule
 
         conformer.ase_molecule.set_calculator(calculator)
-        opt = BFGS(conformer.ase_molecule, logfile=None)
+        opt = LBFGS(conformer.ase_molecule, logfile=None)
 
         if type == 'species':
             if isinstance(i,int):
@@ -204,16 +207,17 @@ def systematic_search(conformer,
             for index,conf in return_dict.items():
                 conf_copy = conf.copy()
                 rmsd = rdMolAlign.GetBestRMS(conformer_copy.rdkit_molecule,conf_copy.rdkit_molecule)
-                if rmsd <= 1.0:
+                if rmsd <= rmsd_cutoff:
                     return True
         if str(i) != 'ref':
             return_dict[i] = conformer
         return True
 
-    calc = conformer.ase_molecule.get_calculator()
-    reference_conformer = conformer.copy()
-    if opt_conf(reference_conformer, calc, 'ref'):
-        conformer = reference_conformer
+    if not isinstance(conformer,TS):
+        calc = conformer.ase_molecule.get_calculator()
+        reference_conformer = conformer.copy()
+        if opt_conf(reference_conformer, calc, 'ref', rmsd_cutoff):
+            conformer = reference_conformer
 
     combos = find_all_combos(
         conformer,
@@ -270,8 +274,6 @@ def systematic_search(conformer,
   
         conformers[index] = conformer.copy()
 
-    logging.info(
-        "There are {} unique conformers generated".format(len(conformers)))
 
     processes = []
     for i, conf in list(conformers.items()):
@@ -306,7 +308,7 @@ def systematic_search(conformer,
         energies.append((conf,conf.energy))
 
     df = pd.DataFrame(energies,columns=["conformer","energy"])
-    df = df[df.energy < df.energy.min() + (10.0 * units.kcal / units.mol /
+    df = df[df.energy < df.energy.min() + (energy_cutoff * units.kcal / units.mol /
             units.eV)].sort_values("energy").reset_index(drop=True)
 
     redundant = []
@@ -315,7 +317,7 @@ def systematic_search(conformer,
         copy_1 = conformer_copies[i].rdkit_molecule
         copy_2 = conformer_copies[j].rdkit_molecule
         rmsd = rdMolAlign.GetBestRMS(copy_1,copy_2)
-        if rmsd <= 1.0:
+        if rmsd <= rmsd_cutoff:
             redundant.append(j)
 
     redundant = list(set(redundant))
@@ -333,11 +335,16 @@ def systematic_search(conformer,
     confs = []
     i = 0
     for conf in df.conformer:
-        for mult in multiplicities:
-            conf_copy = conf.copy()
-            conf_copy.index = i
-            conf_copy.rmg_molecule.multiplicity = mult
-            confs.append(conf_copy)
+        if multiplicity:
+            for mult in multiplicities:
+                conf_copy = conf.copy()
+                conf_copy.index = i
+                conf_copy.rmg_molecule.multiplicity = mult
+                confs.append(conf_copy)
+                i += 1
+        else:
+            conf.index = i
+            confs.append(conf)
             i += 1
 
     logging.info("We have identified {} unique, low-energy conformers for {}".format(
