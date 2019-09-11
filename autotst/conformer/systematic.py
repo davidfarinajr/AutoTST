@@ -194,7 +194,7 @@ def systematic_search(conformer,
         )
 
         if not rmg_mol.isIsomorphic(reference_mol):
-            logging.info("{} if not isomorphic with reference mol")
+            logging.info("{}_{} is not isomorphic with reference mol".format(conformer,str(i)))
             return False
 
         energy = get_energy(conformer)
@@ -308,7 +308,6 @@ def systematic_search(conformer,
     df = pd.DataFrame(energies,columns=["conformer","energy"])
     df = df[df.energy < df.energy.min() + (10.0 * units.kcal / units.mol /
             units.eV)].sort_values("energy").reset_index(drop=True)
-    print df
 
     redundant = []
     conformer_copies = [conf.copy() for conf in df.conformer]
@@ -321,8 +320,6 @@ def systematic_search(conformer,
 
     redundant = list(set(redundant))
     df.drop(df.index[redundant], inplace=True)
-    logging.info("We have identified {} unique conformers for {}".format(
-        len(df.conformer), conformer))
 
     if conformer.rmg_molecule.multiplicity > 2:
         rads = conformer.rmg_molecule.getRadicalCount()
@@ -342,5 +339,8 @@ def systematic_search(conformer,
             conf_copy.rmg_molecule.multiplicity = mult
             confs.append(conf_copy)
             i += 1
+
+    logging.info("We have identified {} unique, low-energy conformers for {}".format(
+        len(confs), conformer))
     
     return confs
