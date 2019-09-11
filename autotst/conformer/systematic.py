@@ -48,6 +48,8 @@ from autotst.species import Conformer
 from autotst.reaction import TS
 from autotst.conformer.utilities import get_energy, find_terminal_torsions
 
+from rmgpy.molecule import Molecule
+
 from rdkit.Chem import rdMolAlign
 
 
@@ -185,8 +187,12 @@ def systematic_search(conformer,
                 pass
             
         conformer.update_coords_from("ase")
-        rmg_mol = conformer.rmg_molecule.copy(deep=True)
-        rmg_mol = rmg_mol.toSingleBonds()
+        rmg_mol = Molecule()
+        rmg_mol.fromXYZ(
+            conformer.ase_molecule.arrays["numbers"],
+            conformer.ase_molecule.arrays["positions"]
+        )
+
         if not rmg_mol.isIsomorphic(reference_mol):
             logging.info("{} if not isomorphic with reference mol")
             return False
@@ -305,10 +311,11 @@ def systematic_search(conformer,
     print df
 
     redundant = []
+    conformer_copies = [conf.copy() for conf in df.conformer]
     for i,j in itertools.combinations(range(len(df.conformer)),2):
-        copy_1 = df.conformer[i].copy()
-        copy_2 = df.conformer[j].copy()
-        rmsd = rdMolAlign.GetBestRMS(copy_1.rdkit_molecule,copy_2.rdkit_molecule)
+        copy_1 = conformer_copies[i].rdkit_molecule
+        copy_2 = conformer_copies[j].rdkit_molecule
+        rmsd = rdMolAlign.GetBestRMS(copy_1,copy_2)
         if rmsd <= 1.0:
             redundant.append(j)
 
