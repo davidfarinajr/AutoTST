@@ -39,7 +39,7 @@ import ase
 from ase import Atoms
 from ase import calculators
 from ase.calculators.calculator import FileIOCalculator
-from ase.optimize import LBFGS
+from ase.optimize import BFGS
 from ase import units
 from ase.constraints import FixBondLengths
 
@@ -168,7 +168,7 @@ def systematic_search(conformer,
             calculator.atoms = conformer.ase_molecule
 
         conformer.ase_molecule.set_calculator(calculator)
-        opt = LBFGS(conformer.ase_molecule, logfile=None)
+        opt = BFGS(conformer.ase_molecule, logfile=None)
 
         if type == 'species':
             if isinstance(i,int):
@@ -277,7 +277,7 @@ def systematic_search(conformer,
 
     processes = []
     for i, conf in list(conformers.items()):
-        p = Process(target=opt_conf, args=(conf, calc, i))
+        p = Process(target=opt_conf, args=(conf, calc, i, rmsd_cutoff))
         processes.append(p)
 
     active_processes = []
