@@ -706,9 +706,9 @@ class ThermoJob():
                     for sp_method in single_point_methods:
                         label = smiles + '_' + sp_method
                         log_path = os.path.join(sp_dir,label + '.log')
-                        complete, _ = self.calculator.verify_output_file(log_path)
-                        if not complete:
-                            logging.info("It seems the log file {} is incomplete".format(log_path))
+                        complete, converged = self.calculator.verify_output_file(log_path)
+                        if not all([complete,converged]):
+                            logging.info("It seems the log file {} is incomplete or didnt converge".format(log_path))
                             continue
                         #sp_log = [f for f in os.listdir(sp_dir) if f.endswith('.log') and ('slurm' not in f) and (sp_method in f)]
                         #label =  "{}_{}_optfreq".format(smiles,method_name)
