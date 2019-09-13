@@ -194,7 +194,7 @@ class ThermoJob():
             else:
                 logging.info("Starting calculations for {}".format(conformer))
             subprocess.Popen(
-                """sbatch --exclude=c5003,c3040 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p {1} -N 1 -n {2} -t {3} --mem={4} $AUTOTST/autotst/job/submit.sh""".format(
+                """sbatch --exclude=c5003 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p {1} -N 1 -n {2} -t {3} --mem={4} $AUTOTST/autotst/job/submit.sh""".format(
                     label,calc.parameters["partition"],calc.parameters["nprocshared"],calc.parameters["time"],calc.parameters["mem"]), shell=True, cwd=calc.scratch)
 
         return label
