@@ -307,13 +307,13 @@ class ThermoJob():
     def calculate_sp(self,conformer,method_name,single_point_method):
  
         self.calculator.conformer = conformer
-        calc = self.calculator.get_SP_calc(method=single_point_method)
+        calc = self.calculator.get_SP_calc(method=single_point_method,convergence='Tight')
         calc.scratch = calc.directory = os.path.join(
             self.directory,
             "species",
             method_name,
             conformer.smiles,
-            "sp"
+            "composite"
         )
         label = calc.label
         log_path = os.path.join(calc.scratch,calc.label + ".log")
@@ -324,28 +324,75 @@ class ThermoJob():
         while not check_complete(label=label,user=self.discovery_username):
             time.sleep(15)
 
-        complete, _ = self.calculator.verify_output_file(log_path)
+        complete, converged = self.calculator.verify_output_file(log_path)
 
-        if (not complete) or (not os.path.exists(log_path)):
+        if (complete and converged):
+            return check_isomorphic(conformer=conformer,log_path=log_path)
+
+        if not complete: # try again
             logging.info(
-                "It seems that the file never completed for {} completed, running it again".format(calc.label))
+                "It appears that {} was killed prematurely".format(calc.label))
             calc.parameters["time"] = "24:00:00"
-            calc.parameters["nprocshared"] = 20
-            calc.parameters["mem"] = "120Gb"
-            label = self._submit_conformer(conformer,calc,restart=True)
+            calc.parameters["nprocshared"] = 16
+            calc.parameters["mem"] = "300Gb"
+            label = self._submit_conformer(conformer,calc, restart=True)
             time.sleep(10)
             while not check_complete(label=label,user=self.discovery_username):
                 time.sleep(15)
 
-            complete, _ = self.calculator.verify_output_file(log_path)
-            if not complete:
+            complete, converged = self.calculator.verify_output_file(log_path)
+            
+            if (complete and converged):
+                return check_isomorphic(conformer=conformer,log_path=log_path)
+            elif not complete:
                 logging.info(
-                "It seems that the file never completed for {}".format(calc.label))
+                    "It appears that {} was killed prematurely or never completed :(".format(calc.label))
+                return False
+            # else complete but not converged
+
+        if not converged:
+            logging.info("{} did not converge, trying it as a looser convergence criteria".format(calc.label))
+            logging.info("Resubmitting {} with default convergence criteria".format(conformer))
+            atoms = read_log(log_path)
+            conformer.ase_molecule = atoms
+            conformer.update_coords_from("ase")
+            self.calculator.conformer = conformer 
+            calc = self.calculator.get_SP_calc(method=single_point_method,convergence='')
+            calc.scratch = calc.directory = os.path.join(
+                self.directory,
+                "species",
+                method_name,
+                conformer.smiles,
+                "composite"
+            )
+            label = calc.label
+
+            logging.info("Removing the old log file that didn't converge, restarting from last geometry")
+            os.remove(log_path)
+
+            label = self._submit_conformer(conformer,calc)
+            time.sleep(10)
+            while not check_complete(label=label,user=self.discovery_username):
+                time.sleep(15)
+
+            if not os.path.exists(log_path):
+                logging.info(
+                "It seems that {}'s loose optimization was never run...".format(calc.label))
                 return False
 
-        if complete:
-            return True
+            complete, converged = self.calculator.verify_output_file(log_path)
 
+            if not complete:
+                logging.info(
+                "It appears that {} was killed prematurely or never completed :(".format(calc.label))
+                return False
+
+            elif not converged:
+                logging.info("{} failed second QM optimization :(".format(calc.label))
+                return False
+
+            else:
+                return check_isomorphic(conformer=conformer,log_path=log_path)
 
     def _calculate_fod(self,conformer,method_name):
         """
@@ -426,7 +473,7 @@ class ThermoJob():
             return False
 
     def calculate_species(self, method = 'm062x', basis_set = 'cc-pvtz', dispersion= None,
-                            optimize = True,
+                          optimize = True, multiplicity = True,
                           recalculate=False, calculate_fod=True, single_point_method=None,
                           arkane_dft = True, arkane_sp = True):
         """
@@ -476,7 +523,7 @@ class ThermoJob():
                     logging.info("Calculating geometries for {}".format(species))
 
                     if self.conformer_calculator:
-                        species.generate_conformers(ase_calculator=self.conformer_calculator)
+                        species.generate_conformers(ase_calculator=self.conformer_calculator,multiplicity=multiplicity)
 
                     currently_running = []
                     processes = {}
@@ -603,6 +650,8 @@ class ThermoJob():
                 conformer = Conformer(smiles=smiles)
                 log = os.path.join(self.directory,"species",method_name,conformer.smiles,label+"_optfreq.log")
                 assert os.path.exists(log), "It appears the calculation failed for {}...cannot perform single point calculations".format(conformer.smiles)
+                complete, converged = self.calculator.verify_output_file(log)
+                assert all([complete, converged]), "It appears the log file in incomplete or did not converge"
                 atoms = read_log(log)
                 mult = ccread(log,loglevel=logging.ERROR).mult
                 conformer.ase_molecule = atoms
@@ -613,7 +662,7 @@ class ThermoJob():
                     single_point_methods = [single_point_method]
                 else: 
                     single_point_methods = single_point_method
-                sp_dir = os.path.join(self.directory,"species",method_name,conformer.smiles,"sp")
+                sp_dir = os.path.join(self.directory,"species",method_name,conformer.smiles,"composite")
                 if not os.path.exists(sp_dir):
                     os.makedirs(sp_dir)
 
@@ -648,7 +697,7 @@ class ThermoJob():
                     "species",
                     method_name,
                     smiles,
-                    'sp',
+                    'composite',
                     'arkane'
                 )
 
@@ -678,7 +727,10 @@ class ThermoJob():
                         arkane_calc = Arkane_Input(molecule=molecule,modelChemistry=model_chem,directory=arkane_dir,
                         gaussian_log_path=log_path)
                         arkane_calc.write_molecule_file()
-                        arkane_calc.write_arkane_input()
+                        if 'G' in sp_method:
+                            arkane_calc.write_arkane_input(frequency_scale_factor=0.9854)
+                        else:
+                            arkane_calc.write_arkane_input()
                         subprocess.Popen(
                             """sbatch --exclude=c5003,c3040 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p test,general,west -N 1 -n 1 -t 10:00 --mem=1GB $RMGpy/Arkane.py arkane_input.py""".format(arkane_calc.label), 
                             shell=True, cwd=arkane_calc.directory)
@@ -689,14 +741,14 @@ class ThermoJob():
                         yml_file = os.path.join(arkane_calc.directory,'species','1.yml')
                         os.remove(os.path.join(arkane_dir,label + ".log"))
 
-                        dest = os.path.expandvars(os.path.join('$halogen_data','reference_species',sp_method))
+                        dest = os.path.expandvars(os.path.join('$halogen_data','reference_species',"{}-GD3BJ".format(sp_method)))
                         if not os.path.exists(dest):
                             os.makedirs(dest)
 
                         if os.path.exists(yml_file):
                             copyfile(yml_file,os.path.join(dest,smiles + '.yml'))
                             copyfile(
-                                os.path.join(self.directory,"species",method_name,smiles,'sp','arkane',smiles+'.py'),
+                                os.path.join(self.directory,"species",method_name,smiles,'composite','arkane',smiles+'.py'),
                                 os.path.join(dest,smiles + '.py')
                             )
                             logging.info('Arkane job completed successfully!')

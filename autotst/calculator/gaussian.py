@@ -259,10 +259,10 @@ class Gaussian():
         
         if num_atoms <= 4:
             self.settings["nprocshared"] = 1
-            self.settings["time"] = '03:00:00'
+            self.settings["time"] = '06:00:00'
         elif num_atoms <= 8:
             self.settings["nprocshared"] = 2
-            self.settings["time"] = '06:00:00'
+            self.settings["time"] = '12:00:00'
         elif num_atoms <= 15:
             self.settings["nprocshared"] = 4
             self.settings["time"] = '12:00:00'
@@ -328,7 +328,7 @@ class Gaussian():
         del ase_gaussian.parameters['force']
         return ase_gaussian
 
-    def get_SP_calc(self,method='G4'):
+    def get_SP_calc(self,method='G4',convergence = ''):
 
         method = method.upper()
         gaussian_methods = [
@@ -339,12 +339,14 @@ class Gaussian():
         assert method in gaussian_methods
 
         self.settings["time"] = "24:00:00"
-        self.settings["mem"] = '110GB'
-        self.settings["nprocshared"] = 16
-        # if "W" in method:
-        #     self.settings["nprocshared"] = 18
-        # else:
-        #     self.settings["nprocshared"] = 12
+        num_atoms = self.conformer.rmg_molecule.getNumAtoms()
+        
+        if num_atoms <= 18:
+            self.settings["mem"] = '100GB'
+            self.settings["nprocshared"] = 16
+        else:
+            self.settings["mem"] = '300GB'
+            self.settings["nprocshared"] = 16
             
         if isinstance(self.conformer, TS):
             logging.info(
@@ -363,7 +365,7 @@ class Gaussian():
             "species",
             self.opt_method,
             self.conformer.smiles,
-            "conformers"
+            "sp"
         )
 
         try:
@@ -379,7 +381,7 @@ class Gaussian():
             scratch=new_scratch,
             method= method,
             basis = '',
-            extra="",
+            extra="opt=(calcfc,maxcycles=900,{}) EmpiricalDispersion=GD3BJ IOP(7/33=1,2/16=3) scf=(maxcycle=900)".format(convergence),
             multiplicity=self.conformer.rmg_molecule.multiplicity)
         ase_gaussian.atoms = self.conformer.ase_molecule
         ase_gaussian.directory = new_scratch
@@ -608,7 +610,7 @@ class Gaussian():
             return (False, False)
 
         f = open(path, "r")
-        file_lines = f.readlines()[-5:]
+        file_lines = f.readlines()[-10:]
         verified = (False, False)
         for file_line in file_lines:
             if " Normal termination" in file_line:

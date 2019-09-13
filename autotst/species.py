@@ -185,14 +185,14 @@ class Species():
 
         return conformers
 
-    def generate_conformers(self, ase_calculator):
+    def generate_conformers(self, ase_calculator, multiplicity):
 
         from autotst.conformer.systematic import systematic_search, find_all_combos
 
         for smiles, conformers in self.conformers.items():
             conformer = conformers[0]
             conformer.ase_molecule.set_calculator(ase_calculator)
-            conformers = systematic_search(conformer)
+            conformers = systematic_search(conformer,multiplicity=multiplicity)
             self.conformers[smiles] = conformers
 
         return self.conformers
