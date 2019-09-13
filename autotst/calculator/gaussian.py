@@ -381,7 +381,7 @@ class Gaussian():
             scratch=new_scratch,
             method= method,
             basis = '',
-            extra="opt=(calcfc,maxcycles=900,{}) EmpiricalDispersion=GD3BJ IOP(7/33=1,2/16=3) scf=(maxcycle=900)".format(convergence),
+            extra="opt=(calcfc,maxcycles=900,{}) IOP(7/33=1,2/16=3) scf=(maxcycle=900)".format(convergence),
             multiplicity=self.conformer.rmg_molecule.multiplicity)
         ase_gaussian.atoms = self.conformer.ase_molecule
         ase_gaussian.directory = new_scratch

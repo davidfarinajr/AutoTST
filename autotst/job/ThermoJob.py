@@ -313,7 +313,7 @@ class ThermoJob():
             "species",
             method_name,
             conformer.smiles,
-            "composite"
+            "sp"
         )
         label = calc.label
         log_path = os.path.join(calc.scratch,calc.label + ".log")
@@ -363,7 +363,7 @@ class ThermoJob():
                 "species",
                 method_name,
                 conformer.smiles,
-                "composite"
+                "sp"
             )
             label = calc.label
 
@@ -662,7 +662,7 @@ class ThermoJob():
                     single_point_methods = [single_point_method]
                 else: 
                     single_point_methods = single_point_method
-                sp_dir = os.path.join(self.directory,"species",method_name,conformer.smiles,"composite")
+                sp_dir = os.path.join(self.directory,"species",method_name,conformer.smiles,"sp")
                 if not os.path.exists(sp_dir):
                     os.makedirs(sp_dir)
 
@@ -697,7 +697,7 @@ class ThermoJob():
                     "species",
                     method_name,
                     smiles,
-                    'composite',
+                    "sp,
                     'arkane'
                 )
 
@@ -748,7 +748,7 @@ class ThermoJob():
                         if os.path.exists(yml_file):
                             copyfile(yml_file,os.path.join(dest,smiles + '.yml'))
                             copyfile(
-                                os.path.join(self.directory,"species",method_name,smiles,'composite','arkane',smiles+'.py'),
+                                os.path.join(self.directory,"species",method_name,smiles,"sp,'arkane',smiles+'.py'),
                                 os.path.join(dest,smiles + '.py')
                             )
                             logging.info('Arkane job completed successfully!')
