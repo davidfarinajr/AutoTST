@@ -327,7 +327,7 @@ class ThermoJob():
         complete, converged = self.calculator.verify_output_file(log_path)
 
         if (complete and converged):
-            return check_isomorphic(conformer=conformer,log_path=log_path)
+            return True
 
         if not complete: # try again
             logging.info(
@@ -343,7 +343,7 @@ class ThermoJob():
             complete, converged = self.calculator.verify_output_file(log_path)
             
             if (complete and converged):
-                return check_isomorphic(conformer=conformer,log_path=log_path)
+                return True
             elif not complete:
                 logging.info(
                     "It appears that {} was killed prematurely or never completed :(".format(calc.label))
@@ -392,7 +392,7 @@ class ThermoJob():
                 return False
 
             else:
-                return check_isomorphic(conformer=conformer,log_path=log_path)
+                return True
 
     def _calculate_fod(self,conformer,method_name):
         """
@@ -697,7 +697,7 @@ class ThermoJob():
                     "species",
                     method_name,
                     smiles,
-                    "sp,
+                    "sp",
                     'arkane'
                 )
 
@@ -741,14 +741,14 @@ class ThermoJob():
                         yml_file = os.path.join(arkane_calc.directory,'species','1.yml')
                         os.remove(os.path.join(arkane_dir,label + ".log"))
 
-                        dest = os.path.expandvars(os.path.join('$halogen_data','reference_species',"{}-GD3BJ".format(sp_method)))
+                        dest = os.path.expandvars(os.path.join('$halogen_data','reference_species',"{}-freqscaled".format(sp_method)))
                         if not os.path.exists(dest):
                             os.makedirs(dest)
 
                         if os.path.exists(yml_file):
                             copyfile(yml_file,os.path.join(dest,smiles + '.yml'))
                             copyfile(
-                                os.path.join(self.directory,"species",method_name,smiles,"sp,'arkane',smiles+'.py'),
+                                os.path.join(self.directory,"species",method_name,smiles,"sp",'arkane',smiles+'.py'),
                                 os.path.join(dest,smiles + '.py')
                             )
                             logging.info('Arkane job completed successfully!')
