@@ -94,7 +94,7 @@ class Arkane_Input():
     
         with open(arkane_input_path,'w+') as f:
             f.write('modelChemistry = "{}"\n'.format(self.modelChemistry))
-            f.write('frequency_scale_factor = {}\n'.format(frequency_scale_factor))
+            f.write('frequencyScaleFactor = {}\n'.format(frequency_scale_factor))
             f.write('useAtomCorrections = {}\n'.format(useAtomCorrections))
             f.write('useBondCorrections = {}\n'.format(useBondCorrections))
             f.write('useHinderedRotors = {}\n'.format(useHinderedRotors))
