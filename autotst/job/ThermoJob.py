@@ -741,7 +741,7 @@ class ThermoJob():
                         yml_file = os.path.join(arkane_calc.directory,'species','1.yml')
                         os.remove(os.path.join(arkane_dir,label + ".log"))
 
-                        dest = os.path.expandvars(os.path.join('$halogen_data','reference_species',"{}-freqscaled".format(sp_method)))
+                        dest = os.path.expandvars(os.path.join('$halogen_data','reference_species',"{}".format(sp_method)))
                         if not os.path.exists(dest):
                             os.makedirs(dest)
 
