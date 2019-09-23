@@ -105,7 +105,7 @@ class ThermoJob():
 
         self.calculator = calculator
         self.sp_calculator = None
-        self.method_name = None
+        self.method_name = calculator.opt_method
         if self.calculator:
             if directory is None:
                 logging.info("Job directory not specified...setting Job directory to calculator directory")
@@ -156,17 +156,9 @@ class ThermoJob():
         """
         assert conformer, "Please provide a conformer to submit a job"
 
-        #self.calculator.conformer = conformer
-        #ase_calculator = self.calculator.get_conformer_calc()
         write_input(conformer, calc)
         label = calc.label
         log_path = os.path.join(calc.scratch,label + '.log')
-
-        #label = conformer.smiles + "_{}".format(conformer.index)
-
-        #log_path = os.path.join(ase_calculator.scratch, label)
-
-        #gaussian_scratch = os.environ['GAUSS_SCRDIR']
         gaussian_scratch = '/scratch/westgroup/GAUSS_SCRDIR/'
         os.environ['GAUSS_SCRDIR'] = gaussian_scratch
         if not os.path.exists(gaussian_scratch):
@@ -200,7 +192,7 @@ class ThermoJob():
         return label
 
 
-    def calculate_conformer(self, conformer, method, basis_set, dispersion):
+    def calculate_conformer(self, conformer):
         """
         A method that optimizes a conformer and performs frequency analysis.
         If the conformer does not convergenge with tight convergence criteria,
@@ -210,16 +202,10 @@ class ThermoJob():
         """
 
         self.calculator.conformer = conformer
-        #self.calculator.convergence = "Tight"
-        calc = self.calculator.get_conformer_calc(method = method, basis_set = basis_set, convergence = 'Tight', dispersion=dispersion)
+        self.calculator.settings["convergence"] = "Tight"
+        calc = self.calculator.get_conformer_calc()
         label = calc.label
-        # scratch_dir = os.path.join(
-        #     self.calculator.directory,
-        #     "species",
-        #     conformer.smiles,
-        #     "conformers")
         log_path = os.path.join(calc.scratch,calc.label + ".log")
-        #f = calc.label + ".log"
         logging.info(
             "Submitting conformer calculation for {}".format(calc.label))
         label = self._submit_conformer(conformer,calc)
@@ -232,8 +218,8 @@ class ThermoJob():
         if not complete:
             logging.info(
                 "It seems that the file never completed for {} completed, running it again".format(calc.label))
-            calc.parameters["time"] = "12:00:00"
-            calc.parameters["nprocshared"] = 12
+            calc.parameters["time"] = "24:00:00"
+            calc.parameters["nprocshared"] = 16
             label = self._submit_conformer(conformer,calc,restart=True)
             time.sleep(10)
             while not check_complete(label=label,user=self.discovery_username):
@@ -241,7 +227,6 @@ class ThermoJob():
 
             complete, converged = self.calculator.verify_output_file(log_path)
 
-        #####
 
         if (complete and converged):
             return check_isomorphic(conformer=conformer,log_path=log_path)
@@ -263,7 +248,6 @@ class ThermoJob():
                 logging.info(
                     "It appears that {} was killed prematurely or never completed :(".format(calc.label))
                 return False
-            # else complete but not converged
 
         if not converged:
             logging.info("{} did not converge, trying it as a looser convergence criteria".format(calc.label))
@@ -272,8 +256,9 @@ class ThermoJob():
             atoms = read_log(log_path)
             conformer.ase_molecule = atoms
             conformer.update_coords_from("ase")
-            self.calculator.conformer = conformer # again, be careful setting this in multiple processes?
-            calc = self.calculator.get_conformer_calc(method = method, basis_set = basis_set, convergence = '', dispersion=dispersion)
+            self.calculator.conformer = conformer
+            self.calculator.settings["convergence"] = ""
+            calc = self.calculator.get_conformer_calc()
 
             logging.info("Removing the old log file that didn't converge, restarting from last geometry")
             os.remove(log_path)
@@ -304,10 +289,12 @@ class ThermoJob():
 
         raise Exception("Shoudn't reach here")
 
-    def calculate_sp(self,conformer,method_name,single_point_method):
+    def calculate_sp(self,conformer,sp_method)):
  
         self.calculator.conformer = conformer
-        calc = self.calculator.get_SP_calc(method=single_point_method,convergence='Tight')
+        self.calculator.settings["convergence"] = "TIGHT"
+        self.calculator.settings["sp"] = sp_method
+        calc = self.calculator.get_sp_calc()
         calc.scratch = calc.directory = os.path.join(
             self.directory,
             "species",
@@ -343,6 +330,7 @@ class ThermoJob():
             complete, converged = self.calculator.verify_output_file(log_path)
             
             if (complete and converged):
+                logging.info("{} completed!".format(label))
                 return True
             elif not complete:
                 logging.info(
@@ -356,8 +344,9 @@ class ThermoJob():
             atoms = read_log(log_path)
             conformer.ase_molecule = atoms
             conformer.update_coords_from("ase")
-            self.calculator.conformer = conformer 
-            calc = self.calculator.get_SP_calc(method=single_point_method,convergence='')
+            self.calculator.conformer = conformer
+            self.calculator.settings["convergence"] = ""
+            calc = self.calculator.get_sp_calc()
             calc.scratch = calc.directory = os.path.join(
                 self.directory,
                 "species",
@@ -381,18 +370,39 @@ class ThermoJob():
                 return False
 
             complete, converged = self.calculator.verify_output_file(log_path)
-
-            if not complete:
+            
+            if (complete and converged):
+                logging.info("{} completed!".format(label))
+                return True
+            
+            elif not complete:
                 logging.info(
-                "It appears that {} was killed prematurely or never completed :(".format(calc.label))
-                return False
+                    "It appears that {} was killed prematurely".format(calc.label))
+                calc.parameters["time"] = "24:00:00"
+                calc.parameters["nprocshared"] = 16
+                calc.parameters["mem"] = "300Gb"
+                label = self._submit_conformer(conformer,calc, restart=True)
+                time.sleep(10)
+                while not check_complete(label=label,user=self.discovery_username):
+                    time.sleep(15)
+
+                complete, converged = self.calculator.verify_output_file(log_path)
+            
+                if (complete and converged):
+                    logging.info("{} completed!".format(label))
+                    return True
+                elif not complete:
+                    logging.info(
+                        "It appears that {} was killed prematurely or never completed :(".format(calc.label))
+                    return False
+                elif not converged:
+                    logging.info("{} failed second QM optimization :(".format(calc.label))
+                    return False
 
             elif not converged:
                 logging.info("{} failed second QM optimization :(".format(calc.label))
                 return False
-
-            else:
-                return True
+     
 
     def _calculate_fod(self,conformer,method_name):
         """
@@ -472,10 +482,19 @@ class ThermoJob():
             logging.info("It appears the FOD orca job never ran")
             return False
 
-    def calculate_species(self, method = 'm062x', basis_set = 'cc-pvtz', dispersion= None,
-                          optimize = True, multiplicity = True,
-                          recalculate=False, calculate_fod=True, single_point_method=None,
-                          arkane_dft = True, arkane_sp = True):
+    def calculate_species(self, 
+                          options = {
+                            "optimize" : True,
+                            "run_sp" : True,
+                            "recalculate" : False,
+                            "calculate_fod" : True,
+                            "delta" : float(120),
+                            "vary_multiplicity" : False,
+                            "rmsd_cutoff" : "default",
+                            "energy_cutoff" : "default",
+                            "run_arkane" : True
+                          }
+                          ):
         """
         Calculates the energy and harmonic frequencies of the lowest energy conformer of a species:
         1) Systematically generates low energy conformers for a given species with an ASE calculator.
@@ -483,16 +502,9 @@ class ThermoJob():
         3) Saves the gaussian optimization and frequency analysis log file for the lowest energy conformer of the species.
         """
         species = self.species
-        method = method.upper()
-        basis_set = basis_set.upper()
-
-        if dispersion:
-            dispersion = dispersion.upper()
-            method_name = method + '-' + dispersion + '_' + basis_set
-            self.method_name = method_name
-        else:
-            method_name = method + '_' + basis_set
-            self.method_name = method_name
+        method = self.calculator.settings['method'].upper()
+        basis_set = self.calculator.settings['basis'].upper()
+        method_name = self.method_name
         
         if optimize:
             for smiles in self.species.smiles:
@@ -523,31 +535,25 @@ class ThermoJob():
                     logging.info("Calculating geometries for {}".format(species))
 
                     if self.conformer_calculator:
-                        species.generate_conformers(ase_calculator=self.conformer_calculator,multiplicity=multiplicity)
+                        species.generate_conformers(
+                            ase_calculator=self.conformer_calculator,
+                            delta = options['delta'],
+                            rmsd_cutoff = options['rmsd_cutoff'],
+                            energy_cutoff = options['energy_cutoff']
+                            multiplicity = options["vary_multiplicity"])
 
                     currently_running = []
                     processes = {}
-                    #for smiles, conformers in list(species.conformers.items()):
-                    #for conformers in list(species.conformers[smiles]):
                     
                     for conformer in species.conformers[smiles]:
                         process = Process(target=self.calculate_conformer, args=(
                             conformer,method,basis_set,dispersion))
                         processes[process.name] = process
 
-                    # This loop will block until everything in processes 
-                    # has been started, and added to currently_running
                     for name, process in list(processes.items()):
-                        # while len(currently_running) >= 50:
-                        #     for running in currently_running:
-                        #         if not running.is_alive():
-                        #             currently_running.remove(name)
-                        #     time.sleep(15)
                         process.start()
                         currently_running.append(name)
 
-                    # This loop will block until everything in currently_running
-                    # has finished.
                     while len(currently_running) > 0:
                         for name, process in list(processes.items()):
                             if not (name in currently_running):
@@ -557,8 +563,7 @@ class ThermoJob():
                         time.sleep(15)
 
                     results = []
-                    #for smiles, conformers in list(species.conformers.items()):
-                    #for conformers in species.conformers[smiles]:
+
                     for conformer in list(species.conformers[smiles]):
                         scratch_dir = os.path.join(
                             self.directory,
@@ -643,123 +648,11 @@ class ThermoJob():
                 conformer.rmg_molecule.multiplicity = mult
                 self._calculate_fod(conformer=conformer,method_name=method_name)
 
-        if single_point_method:
-            method_name = self.method_name
-            for smiles in self.species.smiles:
-                label =  "{}_{}".format(smiles,method_name)
-                conformer = Conformer(smiles=smiles)
-                log = os.path.join(self.directory,"species",method_name,conformer.smiles,label+"_optfreq.log")
-                assert os.path.exists(log), "It appears the calculation failed for {}...cannot perform single point calculations".format(conformer.smiles)
-                complete, converged = self.calculator.verify_output_file(log)
-                assert all([complete, converged]), "It appears the log file in incomplete or did not converge"
-                atoms = read_log(log)
-                mult = ccread(log,loglevel=logging.ERROR).mult
-                conformer.ase_molecule = atoms
-                conformer.update_coords_from("ase")
-                conformer.rmg_molecule.multiplicity = mult
 
-                if isinstance(single_point_method,str):
-                    single_point_methods = [single_point_method]
-                else: 
-                    single_point_methods = single_point_method
-                sp_dir = os.path.join(self.directory,"species",method_name,conformer.smiles,"sp")
-                if not os.path.exists(sp_dir):
-                    os.makedirs(sp_dir)
-
-                currently_running = []
-                processes = {}
-                
-                for sp_method in single_point_methods:
-                    process = Process(target=self.calculate_sp, args=(conformer,method_name,
-                        sp_method))
-                    processes[process.name] = process
-
-                # This loop will block until everything in processes 
-                # has been started, and added to currently_running
-                for name, process in list(processes.items()):
-                    process.start()
-                    currently_running.append(name)
-
-                # This loop will block until everything in currently_running
-                # has finished.
-                while len(currently_running) > 0:
-                    for name, process in list(processes.items()):
-                        if not (name in currently_running):
-                            continue
-                        if not process.is_alive():
-                            currently_running.remove(name)
-                    time.sleep(15)
-
-                if arkane_sp:
-                    
-                    arkane_dir = os.path.join(
-                    self.directory,
-                    "species",
-                    method_name,
-                    smiles,
-                    "sp",
-                    'arkane'
-                )
-
-                    if not os.path.exists(arkane_dir):
-                        os.makedirs(arkane_dir)
-                    for sp_method in single_point_methods:
-                        label = smiles + '_' + sp_method
-                        log_path = os.path.join(sp_dir,label + '.log')
-                        complete, converged = self.calculator.verify_output_file(log_path)
-                        if not all([complete,converged]):
-                            logging.info("It seems the log file {} is incomplete or didnt converge".format(log_path))
-                            continue
-                        #sp_log = [f for f in os.listdir(sp_dir) if f.endswith('.log') and ('slurm' not in f) and (sp_method in f)]
-                        #label =  "{}_{}_optfreq".format(smiles,method_name)
-                        # log_path = os.path.join(self.directory,"species",method_name,smiles,label+".log")
-                        # copyfile(log_path,os.path.join(arkane_dir,label + ".log"))
-                        molecule = self.species.rmg_species[0]
-                        if molecule.toSMILES() != smiles:
-                            for mol in self.species.rmg_species:
-                                if mol.toSMILES() == smiles:
-                                    molecule = mol
-                                    break
-                        molecule.multiplicity = mult
-                        copyfile(log_path,
-                        os.path.join(arkane_dir,label+'.log'))
-                        model_chem = sp_method
-                        arkane_calc = Arkane_Input(molecule=molecule,modelChemistry=model_chem,directory=arkane_dir,
-                        gaussian_log_path=log_path)
-                        arkane_calc.write_molecule_file()
-                        if 'G' in sp_method:
-                            arkane_calc.write_arkane_input(frequency_scale_factor=0.9854)
-                        else:
-                            arkane_calc.write_arkane_input()
-                        subprocess.Popen(
-                            """sbatch --exclude=c5003,c3040 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p test,general,west -N 1 -n 1 -t 10:00 --mem=1GB $RMGpy/Arkane.py arkane_input.py""".format(arkane_calc.label), 
-                            shell=True, cwd=arkane_calc.directory)
-                        time.sleep(10)
-                        while not check_complete(label=arkane_calc.label, user=self.discovery_username):
-                            time.sleep(10)
-
-                        yml_file = os.path.join(arkane_calc.directory,'species','1.yml')
-                        os.remove(os.path.join(arkane_dir,label + ".log"))
-
-                        dest = os.path.expandvars(os.path.join('$halogen_data','reference_species',"{}".format(sp_method)))
-                        if not os.path.exists(dest):
-                            os.makedirs(dest)
-
-                        if os.path.exists(yml_file):
-                            copyfile(yml_file,os.path.join(dest,smiles + '.yml'))
-                            copyfile(
-                                os.path.join(self.directory,"species",method_name,smiles,"sp",'arkane',smiles+'.py'),
-                                os.path.join(dest,smiles + '.py')
-                            )
-                            logging.info('Arkane job completed successfully!')
-
-                        else:
-                            logging.info('It appears the arkane job failed or was never run for {}'.format(smiles))
-
-
-        if arkane_dft:
+        if options['run_arkane']:
             ##### run Arkane
             for i,smiles in enumerate(self.species.smiles):
+                logging.info("running arkane for {} with {} method".format(smiles,method_name))
                 arkane_dir = os.path.join(
                     self.directory,
                     "species",
@@ -801,30 +694,123 @@ class ThermoJob():
                     smiles + '.yml'
                 )
 
-
-                dest2 = os.path.expandvars(os.path.join('$halogen_data','reference_species',method_name))
-                if not os.path.exists(dest2):
-                    os.makedirs(dest2)
-
                 if os.path.exists(yml_file):
                     copyfile(yml_file,dest)
-                    copyfile(yml_file,os.path.join(dest2,smiles + '.yml'))
-                    copyfile(
-                        os.path.join(self.directory,"species",method_name,smiles,smiles + '_fod.log'),
-                        os.path.join(dest2,smiles + '_fod.log')
-                    )  
-                    copyfile(
-                        os.path.join(self.directory,"species",method_name,smiles,smiles + '_' + method_name + '_optfreq.log'),
-                        os.path.join(dest2,smiles + '_' + method_name + '_optfreq.log')
-                    )
-                    copyfile(
-                        os.path.join(self.directory,"species",method_name,smiles,'arkane',smiles+'.py'),
-                        os.path.join(dest2,smiles + '.py')
-                    )
                     logging.info('Arkane job completed successfully!')
 
                 else:
                     logging.info('It appears the arkane job failed or was never run for {}'.format(smiles))
+        
+        if options["run_sp"]:
+            for smiles in self.species.smiles:
+                label =  "{}_{}".format(smiles,method_name)
+                conformer = Conformer(smiles=smiles)
+                log = os.path.join(self.directory,"species",method_name,conformer.smiles,label+"_optfreq.log")
+                assert os.path.exists(log), "It appears the calculation failed for {}...cannot perform single point calculations".format(conformer.smiles)
+                complete, converged = self.calculator.verify_output_file(log)
+                assert all([complete, converged]), "It appears the log file in incomplete or did not converge"
+                atoms = read_log(log)
+                mult = ccread(log,loglevel=logging.ERROR).mult
+                conformer.ase_molecule = atoms
+                conformer.update_coords_from("ase")
+                conformer.rmg_molecule.multiplicity = mult
+
+                single_point_method = self.calculator.settings["sp"]
+                if isinstance(single_point_method,str):
+                    single_point_methods = [single_point_method]
+                else: 
+                    single_point_methods = single_point_method
+                
+                sp_dir = os.path.join(self.directory,"species",method_name,conformer.smiles,"sp")
+                if not os.path.exists(sp_dir):
+                    os.makedirs(sp_dir)
+
+                currently_running = []
+                processes = {}
+                
+                for sp_method in single_point_methods:
+                    process = Process(target=self.calculate_sp, args=(conformer,
+                        sp_method))
+                    processes[process.name] = process
+
+                # This loop will block until everything in processes 
+                # has been started, and added to currently_running
+                for name, process in list(processes.items()):
+                    process.start()
+                    currently_running.append(name)
+
+                # This loop will block until everything in currently_running
+                # has finished.
+                while len(currently_running) > 0:
+                    for name, process in list(processes.items()):
+                        if not (name in currently_running):
+                            continue
+                        if not process.is_alive():
+                            currently_running.remove(name)
+                    time.sleep(15)
+
+                if options['run_arkane']::
+                    
+                    arkane_dir = os.path.join(
+                    self.directory,
+                    "species",
+                    method_name,
+                    smiles,
+                    "sp",
+                    'arkane'
+                )
+
+                    if not os.path.exists(arkane_dir):
+                        os.makedirs(arkane_dir)
+                    for sp_method in single_point_methods:
+                        label = smiles + '_' + sp_method
+                        log_path = os.path.join(sp_dir,label + '.log')
+                        complete, converged = self.calculator.verify_output_file(log_path)
+                        if not all([complete,converged]):
+                            logging.info("It seems the log file {} is incomplete or didnt converge".format(log_path))
+                            continue
+                        molecule = self.species.rmg_species[0]
+                        if molecule.toSMILES() != smiles:
+                            for mol in self.species.rmg_species:
+                                if mol.toSMILES() == smiles:
+                                    molecule = mol
+                                    break
+                        molecule.multiplicity = mult
+                        copyfile(log_path,
+                        os.path.join(arkane_dir,label+'.log'))
+                        model_chem = sp_method
+                        arkane_calc = Arkane_Input(molecule=molecule,modelChemistry=model_chem,directory=arkane_dir,
+                        gaussian_log_path=log_path)
+                        arkane_calc.write_molecule_file()
+                        if 'G' in sp_method:
+                            arkane_calc.write_arkane_input(frequency_scale_factor=0.9854)
+                        else:
+                            arkane_calc.write_arkane_input()
+                        subprocess.Popen(
+                            """sbatch --exclude=c5003,c3040 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p test,general,west -N 1 -n 1 -t 10:00 --mem=1GB $RMGpy/Arkane.py arkane_input.py""".format(arkane_calc.label), 
+                            shell=True, cwd=arkane_calc.directory)
+                        time.sleep(10)
+                        while not check_complete(label=arkane_calc.label, user=self.discovery_username):
+                            time.sleep(10)
+
+                        yml_file = os.path.join(arkane_calc.directory,'species','1.yml')
+                        os.remove(os.path.join(arkane_dir,label + ".log"))
+
+                        # dest = os.path.expandvars(os.path.join('$halogen_data','reference_species',"{}".format(sp_method)))
+                        # if not os.path.exists(dest):
+                        #     os.makedirs(dest)
+
+                        if os.path.exists(yml_file):
+                            copyfile(yml_file,os.path.join(dest,smiles + '.yml'))
+                            # copyfile(
+                            #     os.path.join(self.directory,"species",method_name,smiles,"sp",'arkane',smiles+'.py'),
+                            #     os.path.join(dest,smiles + '.py')
+                            # )
+                            logging.info('Arkane job completed successfully!')
+
+                        else:
+                            logging.info('It appears the arkane job failed or was never run for {}'.format(smiles))
+
 
 
 

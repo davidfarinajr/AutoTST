@@ -103,12 +103,14 @@ class Gaussian():
                  settings={
                      "method": "m062x",
                      "basis": "cc-pVTZ",
+                     "dispersion": None,
                      "mem": "5GB",
+                     "sp": 'G4',
+                     "convergence": 'default',
                      "nprocshared": 20,
-                     "time": "12:00:00",
+                     "time": "24:00:00",
                      "partition": 'general,west'
                  },
-                 convergence="",
                  directory=".", #where you want input and log files to be written, default is current directory
                  scratch=None  #where you want temporary files to be written
                  ):
@@ -135,12 +137,27 @@ class Gaussian():
 
         self.command = "g16"
         self.settings = settings
-        self.opt_method = settings["method"].upper() + '_' + settings["basis"].upper()
-        self.convergence = convergence
-        convergence_options = ["", "verytight", "tight", "loose"]
-        assert self.convergence.lower() in convergence_options,"{} is not among the supported convergence options {}".format(self.convergence,convergence_options)
+
+        self.settings["convergence"] = settings["convergence"].lower()
+        convergence_options = ["default", "verytight", "tight", "loose"]
+        assert self.settings["convergence"] in convergence_options,"{} is not among the supported convergence options {}".format(settings["convergence"],convergence_options)
+        if self.settings["convergence"] == "default":
+            self.settings["convergence"] = ''
+    
         self.directory = directory
 
+        if self.settings["dispersion"]:
+            dispersion = self.settings["dispersion"].upper()
+        else:
+            disperion = None
+
+        if settings["dispersion"]:
+            dispersion = settings["dispersion"].upper()
+            assert dispersion in ['GD3','GD3BJ','GD2'],'Acceptable keywords for dispersion are GD3, GD3BJ, or GD2'
+            self.opt_method = settings["method"].upper() + '-' + dispersion + '_' + settings["basis"].upper()
+        else:
+            self.opt_method = settings["method"].upper() + '_' + settings["basis"].upper()
+   
         try: 
             if scratch is None:
                 self.scratch = os.environ['GAUSS_SCRDIR']
@@ -236,7 +253,7 @@ class Gaussian():
         del ase_gaussian.parameters['force']
         return ase_gaussian
 
-    def get_conformer_calc(self, method = 'm062x', basis_set = 'cc-pvtz', convergence = '', dispersion=None):
+    def get_conformer_calc(self):
         """
         A method that creates a calculator for a `Conformer` that will perform a geometry optimization
 
@@ -251,15 +268,21 @@ class Gaussian():
         - calc (ASEGaussian): an ASEGaussian calculator with all of the proper setting specified
         """
 
-        method = method.upper()
-        basis_set = basis_set.upper()
+        method = self.settings["method"].upper()
+        basis = self.settings["basis"].upper()
+        dispersion = self.settings["dispersion"].upper()
+        convergence = self.settings["convergence"].upper()
+
+
+        if dispersion:
+            dispersion = 'EmpiricalDispersion={}'.format(dispersion)
 
         self.settings["mem"] = '10GB'
         num_atoms = self.conformer.rmg_molecule.getNumAtoms()
         
         if num_atoms <= 4:
             self.settings["nprocshared"] = 1
-            self.settings["time"] = '06:00:00'
+            self.settings["time"] = '12:00:00'
         elif num_atoms <= 8:
             self.settings["nprocshared"] = 2
             self.settings["time"] = '12:00:00'
@@ -275,17 +298,6 @@ class Gaussian():
             self.settings["time"] = '24:00:00'
             self.settings["mem"] = '20GB'
 
-        if dispersion:
-            dispersion = dispersion.upper()
-            assert dispersion in ['GD3','GD3BJ','GD2'],'Acceptable keywords for dispersion are GD3, GD3BJ, or GD2'
-            method_name = method + '-' + dispersion + '_' + basis_set
-            dispersion = 'EmpiricalDispersion={}'.format(dispersion)
-        else:
-            dispersion = ''
-            method_name = method + '_' + basis_set
-        
-        self.opt_method = method_name
-
         if isinstance(self.conformer, TS):
             logging.info(
                 "TS object provided, cannot obtain a species calculator for a TS")
@@ -296,12 +308,12 @@ class Gaussian():
 
         #self.conformer.rmg_molecule.updateMultiplicity()
 
-        label = "{}_{}_{}_optfreq".format(self.conformer.smiles, self.conformer.index, method_name)
+        label = "{}_{}_{}_optfreq".format(self.conformer.smiles, self.conformer.index, self.opt_method)
 
         new_scratch = os.path.join(
             self.directory,
             "species",
-            method_name,
+            self.opt_method,
             self.conformer.smiles,
             "conformers"
         )
@@ -318,7 +330,7 @@ class Gaussian():
             label=label,
             scratch=new_scratch,
             method=method,
-            basis=basis_set,
+            basis=basis,
             extra="opt=(calcfc,maxcycles=900,{}) {} freq IOP(7/33=1,2/16=3) scf=(maxcycle=900)".format(convergence,dispersion),
             multiplicity=self.conformer.rmg_molecule.multiplicity)
         ase_gaussian.atoms = self.conformer.ase_molecule
@@ -328,9 +340,11 @@ class Gaussian():
         del ase_gaussian.parameters['force']
         return ase_gaussian
 
-    def get_SP_calc(self,method='G4',convergence = ''):
+    def get_sp_calc(self):
 
-        method = method.upper()
+        method = self.settings["sp"].upper()
+        convergence = self.settings["convergence"].upper()
+
         gaussian_methods = [
             "G1","G2","G3","G4","G2MP2","G3MP2","G3B3","G3MP2B3","G4","G4MP2",
             "W1","W1U","W1BD","W1RO",
@@ -356,7 +370,7 @@ class Gaussian():
         assert isinstance(
             self.conformer, Conformer), "A Conformer object was not provided..."
 
-        self.conformer.rmg_molecule.updateMultiplicity()
+        #self.conformer.rmg_molecule.updateMultiplicity()
 
         label = "{}_{}".format(self.conformer.smiles, method)
 
