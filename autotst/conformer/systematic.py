@@ -43,15 +43,15 @@ from ase.optimize import BFGS
 from ase import units
 from ase.constraints import FixBondLengths
 
+from rdkit.Chem import rdMolAlign
+
+from rmgpy.exceptions import AtomTypeError
+from rmgpy.molecule import Molecule
+
 import autotst
 from autotst.species import Conformer
 from autotst.reaction import TS
 from autotst.conformer.utilities import get_energy, find_terminal_torsions
-
-from rmgpy.molecule import Molecule
-
-from rdkit.Chem import rdMolAlign
-
 
 def find_all_combos(
         conformer,
@@ -108,10 +108,10 @@ def find_all_combos(
 def systematic_search(conformer,
                       delta=float(120),
                       energy_cutoff = 10.0, #kcal/mol
-                      rmsd_cutoff = 1.0, #angstroms
+                      rmsd_cutoff = 0.5, #angstroms
                       cistrans = True,
                       chiral_centers = True,
-                      multiplicity = True
+                      multiplicity = False,
                       ):
     """
     Perfoms a systematic conformer analysis of a `Conformer` or a `TS` object
@@ -125,10 +125,32 @@ def systematic_search(conformer,
     Returns:
     - confs (list): a list of unique `Conformer` objects within 1 kcal/mol of the lowest energy conformer determined
     """
-    # Takes each of the molecule objects
+    
+    rmsd_cutoff_options = {
+        'loose' : 1.0,
+        'default': 0.5,
+        'tight': 0.1
+    }
 
-    reference_mol = conformer.rmg_molecule.copy(deep=True)
-    reference_mol = reference_mol.toSingleBonds()
+    energy_cutoff_options = {
+        'high' : 50.0,
+        'default' : 10.0,
+        'low' : 5.0
+    }
+
+    if isinstance(rmsd_cutoff,str):
+        rmsd_cutoff = rmsd_cutoff.lower()
+        assert rmsd_cutoff in rmsd_cutoff_options.keys(), 'rmsd_cutoff options are loose, default, and tight'
+        rmsd_cutoff = rmsd_cutoff_options[rmsd_cutoff]
+
+    if isinstance(energy_cutoff,str):
+        energy_cutoff = energy_cutoff.lower()
+        assert energy_cutoff in energy_cutoff.keys(), 'energy_cutoff options are low, default, and high'
+        energy_cutoff = energy_cutoff_options[energy_cutoff]
+    
+    if not isinstance(conformer, TS):
+        reference_mol = conformer.rmg_molecule.copy(deep=True)
+        reference_mol = reference_mol.toSingleBonds()
     manager = Manager()
     return_dict = manager.dict()
 
@@ -179,6 +201,20 @@ def systematic_search(conformer,
             except RuntimeError:
                 logging.info("Optimization failed...we will use the unconverged geometry")
                 pass
+            if str(i) == 'ref':
+                conformer.update_coords_from("ase")
+                try:
+                    rmg_mol = Molecule()
+                    rmg_mol.fromXYZ(
+                        conformer.ase_molecule.arrays["numbers"],
+                        conformer.ase_molecule.arrays["positions"]
+                    )
+                    if not rmg_mol.isIsomorphic(reference_mol):
+                        logging.info("{}_{} is not isomorphic with reference mol".format(conformer,str(i)))
+                        return False
+                except AtomTypeError:
+                    logging.info("Could not create a RMG Molecule from optimized conformer coordinates...assuming not isomorphic")
+                    return False
         
         if type == 'ts':
             c = FixBondLengths(labels)
@@ -188,18 +224,8 @@ def systematic_search(conformer,
             except RuntimeError:
                 logging.info("Optimization failed...we will use the unconverged geometry")
                 pass
-            
-        conformer.update_coords_from("ase")
-        rmg_mol = Molecule()
-        rmg_mol.fromXYZ(
-            conformer.ase_molecule.arrays["numbers"],
-            conformer.ase_molecule.arrays["positions"]
-        )
 
-        if not rmg_mol.isIsomorphic(reference_mol):
-            logging.info("{}_{} is not isomorphic with reference mol".format(conformer,str(i)))
-            return False
-
+        conformer.update_coords_from("ase")  
         energy = get_energy(conformer)
         conformer.energy = energy
         if len(return_dict)>0:
@@ -323,7 +349,7 @@ def systematic_search(conformer,
     redundant = list(set(redundant))
     df.drop(df.index[redundant], inplace=True)
 
-    if conformer.rmg_molecule.multiplicity > 2:
+    if multiplicity and conformer.rmg_molecule.multiplicity > 2:
         rads = conformer.rmg_molecule.getRadicalCount()
         if rads % 2 == 0:
             multiplicities = range(1,rads+2,2)
