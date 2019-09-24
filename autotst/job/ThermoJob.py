@@ -546,8 +546,8 @@ class ThermoJob():
                     processes = {}
                     
                     for conformer in species.conformers[smiles]:
-                        process = Process(target=self.calculate_conformer, args=(
-                            conformer))
+                        process = Process(target=self.calculate_conformer, args=
+                            conformer)
                         processes[process.name] = process
 
                     for name, process in list(processes.items()):
