@@ -506,7 +506,7 @@ class ThermoJob():
         basis_set = self.calculator.settings['basis'].upper()
         method_name = self.method_name
         
-        if optimize:
+        if options[optimize]:
             for smiles in self.species.smiles:
                 got_one = False
                 label =  "{}_{}_optfreq".format(smiles,method_name)
@@ -531,7 +531,7 @@ class ThermoJob():
                         logging.info('removing existing log and restarting calculation...')
                         os.remove(log_path)
 
-                if recalculate or not got_one:
+                if options[recalculate] or not got_one:
                     logging.info("Calculating geometries for {}".format(species))
 
                     if self.conformer_calculator:
