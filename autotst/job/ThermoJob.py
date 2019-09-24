@@ -289,7 +289,7 @@ class ThermoJob():
 
         raise Exception("Shoudn't reach here")
 
-    def calculate_sp(self,conformer,sp_method)):
+    def calculate_sp(self,conformer,sp_method):
  
         self.calculator.conformer = conformer
         self.calculator.settings["convergence"] = "TIGHT"
@@ -539,7 +539,7 @@ class ThermoJob():
                             ase_calculator=self.conformer_calculator,
                             delta = options['delta'],
                             rmsd_cutoff = options['rmsd_cutoff'],
-                            energy_cutoff = options['energy_cutoff']
+                            energy_cutoff = options['energy_cutoff'],
                             multiplicity = options["vary_multiplicity"])
 
                     currently_running = []
@@ -751,11 +751,11 @@ class ThermoJob():
 
         if options['run_arkane']:
 
-            single_point_method = self.calculator.settings["sp"]:
-                if isinstance(single_point_method,str):
-                    single_point_methods = [single_point_method]
-                else: 
-                    single_point_methods = single_point_method
+            single_point_method = self.calculator.settings["sp"]
+            if isinstance(single_point_method,str):
+                single_point_methods = [single_point_method]
+            else: 
+                single_point_methods = single_point_method
             
             arkane_dir = os.path.join(
             self.directory,
