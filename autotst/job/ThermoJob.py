@@ -631,7 +631,7 @@ class ThermoJob():
                     logging.info("The lowest energy xyz file is {}!".format(
                         xyzpath))
 
-        if calculate_fod:  # We will run an orca FOD job
+        if options[calculate_fod]:  # We will run an orca FOD job
             
             method_name = self.method_name
             # Update the lowest energy conformer 
