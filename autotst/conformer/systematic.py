@@ -145,7 +145,7 @@ def systematic_search(conformer,
 
     if isinstance(energy_cutoff,str):
         energy_cutoff = energy_cutoff.lower()
-        assert energy_cutoff in energy_cutoff.keys(), 'energy_cutoff options are low, default, and high'
+        assert energy_cutoff in energy_cutoff_options.keys(), 'energy_cutoff options are low, default, and high'
         energy_cutoff = energy_cutoff_options[energy_cutoff]
     
     if not isinstance(conformer, TS):
