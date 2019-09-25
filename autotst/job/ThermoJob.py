@@ -512,7 +512,7 @@ class ThermoJob():
                 got_one = False
                 label =  "{}_{}_optfreq".format(smiles,method_name)
                 log_path = os.path.join(self.calculator.directory,"species",method_name,smiles,label+".log")
-                if os.path.exists(log_path) and not recalculate:
+                if os.path.exists(log_path) and not options["recalculate"]:
                     logging.info('It appears we already calculated this species')
                     logging.info('Checking to see if the log is complete and converge...')
                     complete, converged = self.calculator.verify_output_file(log_path)
