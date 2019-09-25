@@ -290,7 +290,8 @@ class ThermoJob():
         raise Exception("Shoudn't reach here")
 
     def calculate_sp(self,conformer,sp_method):
- 
+        
+        method_name = self.method_name
         self.calculator.conformer = conformer
         self.calculator.settings["convergence"] = "TIGHT"
         self.calculator.settings["sp"] = sp_method
