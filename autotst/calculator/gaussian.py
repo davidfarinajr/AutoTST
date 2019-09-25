@@ -46,18 +46,71 @@ from ase import Atom, Atoms
 from ase.io.gaussian import read_gaussian, read_gaussian_out
 from ase.calculators.gaussian import Gaussian as ASEGaussian
 
+from shutil import move
+
+def read_log(file_path=None):
+        """
+        A helper method that allows one to easily parse log files
+        """
+        symbol_dict = {
+            53: "I",
+            35: "Br",
+            17: "Cl",
+            9:  "F",
+            8:  "O",
+            7:  "N",
+            6:  "C",
+            1:  "H",
+        }
+        atoms = []
+
+        parser = ccread(file_path, loglevel=logging.ERROR)
+
+        for atom_num, coords in zip(parser.atomnos, parser.atomcoords[-1]):
+            atoms.append(Atom(symbol=symbol_dict[atom_num], position=coords))
+
+        return Atoms(atoms)
+
+def write_input(conformer, ase_calculator):
+        """
+        A helper method that will write an input file and move it to the correct scratch directory
+        """
+
+        ase_calculator.write_input(conformer.ase_molecule)
+        try:
+            os.makedirs(ase_calculator.scratch)
+        except OSError:
+            pass
+
+        move(
+            ase_calculator.label + ".com",
+            os.path.join(
+                ase_calculator.scratch,
+                ase_calculator.label + ".com"
+            ))
+
+        move(
+            ase_calculator.label + ".ase",
+            os.path.join(
+                ase_calculator.scratch,
+                ase_calculator.label + ".ase"
+            ))
 
 class Gaussian():
 
     def __init__(self,
-                 conformer=None, # Either a transition state or a conformer
+                 conformer= None, # Either a transition state or a conformer
                  settings={
                      "method": "m062x",
                      "basis": "cc-pVTZ",
+                     "dispersion": None,
                      "mem": "5GB",
-                     "nprocshared": 24,
+                     "sp": 'G4',
+                     "convergence": 'default',
+                     "nprocshared": 20,
+                     "time": "24:00:00",
+                     "partition": 'general,west'
                  },
-                 convergence="",
                  directory=".", #where you want input and log files to be written, default is current directory
                  scratch=None  #where you want temporary files to be written
                  ):
@@ -66,7 +119,7 @@ class Gaussian():
             "method": "m062x",
             "basis": "cc-pVTZ",
             "mem": "5GB",
-            "nprocshared": 24,
+            "nprocshared": 20,
         }
 
         self.conformer = conformer
@@ -81,13 +134,30 @@ class Gaussian():
                     setting, value))
                 settings[setting] = value
 
+
         self.command = "g16"
         self.settings = settings
-        self.convergence = convergence
-        convergence_options = ["", "verytight", "tight", "loose"]
-        assert self.convergence.lower() in convergence_options,"{} is not among the supported convergence options {}".format(self.convergence,convergence_options)
+
+        self.settings["convergence"] = settings["convergence"].lower()
+        convergence_options = ["default", "verytight", "tight", "loose"]
+        assert self.settings["convergence"] in convergence_options,"{} is not among the supported convergence options {}".format(settings["convergence"],convergence_options)
+        if self.settings["convergence"] == "default":
+            self.settings["convergence"] = ''
+    
         self.directory = directory
 
+        if self.settings["dispersion"]:
+            dispersion = self.settings["dispersion"].upper()
+        else:
+            disperion = None
+
+        if settings["dispersion"]:
+            dispersion = settings["dispersion"].upper()
+            assert dispersion in ['GD3','GD3BJ','GD2'],'Acceptable keywords for dispersion are GD3, GD3BJ, or GD2'
+            self.opt_method = settings["method"].upper() + '-' + dispersion + '_' + settings["basis"].upper()
+        else:
+            self.opt_method = settings["method"].upper() + '_' + settings["basis"].upper()
+   
         try: 
             if scratch is None:
                 self.scratch = os.environ['GAUSS_SCRDIR']
@@ -198,6 +268,35 @@ class Gaussian():
         - calc (ASEGaussian): an ASEGaussian calculator with all of the proper setting specified
         """
 
+        method = self.settings["method"].upper()
+        basis = self.settings["basis"].upper()
+        dispersion = self.settings["dispersion"].upper()
+        convergence = self.settings["convergence"].upper()
+
+
+        if dispersion:
+            dispersion = 'EmpiricalDispersion={}'.format(dispersion)
+
+        self.settings["mem"] = '10GB'
+        num_atoms = self.conformer.rmg_molecule.getNumAtoms()
+        
+        if num_atoms <= 4:
+            self.settings["nprocshared"] = 1
+            self.settings["time"] = '12:00:00'
+        elif num_atoms <= 8:
+            self.settings["nprocshared"] = 2
+            self.settings["time"] = '12:00:00'
+        elif num_atoms <= 15:
+            self.settings["nprocshared"] = 4
+            self.settings["time"] = '12:00:00'
+        elif num_atoms <= 20:
+            self.settings["nprocshared"] = 8
+            self.settings["time"] = '12:00:00'
+            self.settings["mem"] = '20GB'
+        else:
+            self.settings["nprocshared"] = 12
+            self.settings["time"] = '24:00:00'
+            self.settings["mem"] = '20GB'
 
         if isinstance(self.conformer, TS):
             logging.info(
@@ -207,13 +306,14 @@ class Gaussian():
         assert isinstance(
             self.conformer, Conformer), "A Conformer object was not provided..."
 
-        self.conformer.rmg_molecule.updateMultiplicity()
+        #self.conformer.rmg_molecule.updateMultiplicity()
 
-        label = "{}_{}".format(self.conformer.smiles, self.conformer.index)
+        label = "{}_{}_{}_optfreq".format(self.conformer.smiles, self.conformer.index, self.opt_method)
 
         new_scratch = os.path.join(
             self.directory,
             "species",
+            self.opt_method,
             self.conformer.smiles,
             "conformers"
         )
@@ -223,16 +323,84 @@ class Gaussian():
         except OSError:
             pass
 
+       
         ase_gaussian = ASEGaussian(
             mem=self.settings["mem"],
             nprocshared=self.settings["nprocshared"],
             label=label,
             scratch=new_scratch,
-            method=self.settings["method"],
-            basis=self.settings["basis"],
-            extra="opt=(calcfc,maxcycles=900,{}) freq IOP(7/33=1,2/16=3) scf=(maxcycle=900)".format(self.convergence),
+            method=method,
+            basis=basis,
+            extra="opt=(calcfc,maxcycles=900,{}) {} freq IOP(7/33=1,2/16=3) scf=(maxcycle=900)".format(convergence,dispersion),
             multiplicity=self.conformer.rmg_molecule.multiplicity)
         ase_gaussian.atoms = self.conformer.ase_molecule
+        ase_gaussian.directory = new_scratch
+        ase_gaussian.parameters["partition"] = self.settings["partition"]
+        ase_gaussian.parameters["time"] = self.settings["time"]
+        del ase_gaussian.parameters['force']
+        return ase_gaussian
+
+    def get_sp_calc(self):
+
+        method = self.settings["sp"].upper()
+        convergence = self.settings["convergence"].upper()
+
+        gaussian_methods = [
+            "G1","G2","G3","G4","G2MP2","G3MP2","G3B3","G3MP2B3","G4","G4MP2",
+            "W1","W1U","W1BD","W1RO",
+            "CBS-4M","CBS-QB3","CBS-APNO",
+        ]
+        assert method in gaussian_methods
+
+        self.settings["time"] = "24:00:00"
+        num_atoms = self.conformer.rmg_molecule.getNumAtoms()
+        
+        if num_atoms <= 18:
+            self.settings["mem"] = '100GB'
+            self.settings["nprocshared"] = 16
+        else:
+            self.settings["mem"] = '300GB'
+            self.settings["nprocshared"] = 16
+            
+        if isinstance(self.conformer, TS):
+            logging.info(
+                "TS object provided, cannot obtain a species calculator for a TS")
+            return None
+
+        assert isinstance(
+            self.conformer, Conformer), "A Conformer object was not provided..."
+
+        #self.conformer.rmg_molecule.updateMultiplicity()
+
+        label = "{}_{}".format(self.conformer.smiles, method)
+
+        new_scratch = os.path.join(
+            self.directory,
+            "species",
+            self.opt_method,
+            self.conformer.smiles,
+            "sp"
+        )
+
+        try:
+            os.makedirs(new_scratch)
+        except OSError:
+            pass
+
+       
+        ase_gaussian = ASEGaussian(
+            mem=self.settings["mem"],
+            nprocshared=self.settings["nprocshared"],
+            label=label,
+            scratch=new_scratch,
+            method= method,
+            basis = '',
+            extra="opt=(calcfc,maxcycles=900,{}) IOP(7/33=1,2/16=3) scf=(maxcycle=900)".format(convergence),
+            multiplicity=self.conformer.rmg_molecule.multiplicity)
+        ase_gaussian.atoms = self.conformer.ase_molecule
+        ase_gaussian.directory = new_scratch
+        ase_gaussian.parameters["partition"] = self.settings["partition"]
+        ase_gaussian.parameters["time"] = self.settings["time"]
         del ase_gaussian.parameters['force']
         return ase_gaussian
 
@@ -456,7 +624,7 @@ class Gaussian():
             return (False, False)
 
         f = open(path, "r")
-        file_lines = f.readlines()[-5:]
+        file_lines = f.readlines()[-10:]
         verified = (False, False)
         for file_line in file_lines:
             if " Normal termination" in file_line:
@@ -479,6 +647,8 @@ class Gaussian():
             "irc",
             self.conformer.reaction_label + "_irc_" + self.conformer.direction + "_" + str(self.conformer.index) + ".log"
         )
+
+        label = self.conformer.reaction_label + "_" + self.conformer.direction + "_" + str(self.conformer.index)
 
         complete, converged = self.verify_output_file(irc_path)
         if not complete:
@@ -512,7 +682,7 @@ class Gaussian():
         else:
             pth1End = sum(steps[:pth1[-1]])
             # Compare the reactants and products
-            ircParse = ccread(irc_path)
+            ircParse = ccread(irc_path, loglevel=logging.ERROR)
 
 
             atomcoords = ircParse.atomcoords
@@ -572,5 +742,5 @@ class Gaussian():
                     if targetReaction.isIsomorphic(testReaction):
                         logging.info("IRC calculation was successful!")
                         return True
-            logging.info("IRC calculation failed for {} :(".format(irc_path))
+            logging.info("IRC calculation failed for {} :(".format(label))
             return False
