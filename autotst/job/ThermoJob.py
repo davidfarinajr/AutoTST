@@ -778,68 +778,70 @@ class ThermoJob():
                 single_point_methods = [single_point_method]
             else: 
                 single_point_methods = single_point_method
-            
-            arkane_dir = os.path.join(
-            self.directory,
-            "species",
-            method_name,
-            smiles,
-            "sp",
-            'arkane'
-            )
 
-            if not os.path.exists(arkane_dir):
-                os.makedirs(arkane_dir)
-            for sp_method in single_point_methods:
-                label = smiles + '_' + sp_method
-                log_path = os.path.join(sp_dir,label + '.log')
-                complete, converged = self.calculator.verify_output_file(log_path)
-                if not all([complete,converged]):
-                    logging.info("It seems the log file {} is incomplete or didnt converge".format(log_path))
-                    continue
-                molecule = self.species.rmg_species[0]
-                if molecule.toSMILES() != smiles:
-                    for mol in self.species.rmg_species:
-                        if mol.toSMILES() == smiles:
-                            molecule = mol
-                            break
-                molecule.multiplicity = mult
-                copyfile(log_path,
-                os.path.join(arkane_dir,label+'.log'))
-                model_chem = sp_method
-                arkane_calc = Arkane_Input(molecule=molecule,modelChemistry=model_chem,directory=arkane_dir,
-                gaussian_log_path=log_path)
-                arkane_calc.write_molecule_file()
-                if 'G' in sp_method:
-                    arkane_calc.write_arkane_input(frequency_scale_factor=0.9854)
-                else:
-                    arkane_calc.write_arkane_input()
-                subprocess.Popen(
-                    """sbatch --exclude=c5003,c3040 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p test,general,west -N 1 -n 1 -t 10:00 --mem=1GB $RMGpy/Arkane.py arkane_input.py""".format(arkane_calc.label), 
-                    shell=True, cwd=arkane_calc.directory)
-                time.sleep(10)
-                while not check_complete(label=arkane_calc.label, user=self.discovery_username):
+            for smiles in self.species.smiles:
+
+                arkane_dir = os.path.join(
+                self.directory,
+                "species",
+                method_name,
+                smiles,
+                "sp",
+                'arkane'
+                )
+
+                if not os.path.exists(arkane_dir):
+                    os.makedirs(arkane_dir)
+                for sp_method in single_point_methods:
+                    label = smiles + '_' + sp_method
+                    log_path = os.path.join(sp_dir,label + '.log')
+                    complete, converged = self.calculator.verify_output_file(log_path)
+                    if not all([complete,converged]):
+                        logging.info("It seems the log file {} is incomplete or didnt converge".format(log_path))
+                        continue
+                    molecule = self.species.rmg_species[0]
+                    if molecule.toSMILES() != smiles:
+                        for mol in self.species.rmg_species:
+                            if mol.toSMILES() == smiles:
+                                molecule = mol
+                                break
+                    molecule.multiplicity = mult
+                    copyfile(log_path,
+                    os.path.join(arkane_dir,label+'.log'))
+                    model_chem = sp_method
+                    arkane_calc = Arkane_Input(molecule=molecule,modelChemistry=model_chem,directory=arkane_dir,
+                    gaussian_log_path=log_path)
+                    arkane_calc.write_molecule_file()
+                    if 'G' in sp_method:
+                        arkane_calc.write_arkane_input(frequency_scale_factor=0.9854)
+                    else:
+                        arkane_calc.write_arkane_input()
+                    subprocess.Popen(
+                        """sbatch --exclude=c5003,c3040 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p test,general,west -N 1 -n 1 -t 10:00 --mem=1GB $RMGpy/Arkane.py arkane_input.py""".format(arkane_calc.label), 
+                        shell=True, cwd=arkane_calc.directory)
                     time.sleep(10)
+                    while not check_complete(label=arkane_calc.label, user=self.discovery_username):
+                        time.sleep(10)
 
-                yml_file = os.path.join(arkane_calc.directory,'species','1.yml')
-                os.remove(os.path.join(arkane_dir,label + ".log"))
+                    yml_file = os.path.join(arkane_calc.directory,'species','1.yml')
+                    os.remove(os.path.join(arkane_dir,label + ".log"))
 
-                if options['dir_path']:
-                    dest = os.path.join(options['dir_path'],sp_method)
+                    if options['dir_path']:
+                        dest = os.path.join(options['dir_path'],sp_method)
 
-                if not os.path.exists(dest):
-                    os.makedirs(dest)
+                    if not os.path.exists(dest):
+                        os.makedirs(dest)
 
-                if os.path.exists(yml_file):
-                    copyfile(yml_file,os.path.join(dest,smiles + '.yml'))
-                    logging.info('Arkane job completed successfully!')
+                    if os.path.exists(yml_file):
+                        copyfile(yml_file,os.path.join(dest,smiles + '.yml'))
+                        logging.info('Arkane job completed successfully!')
 
-                else:
-                    logging.info('It appears the arkane job failed or was never run for {}'.format(smiles))
-
-
+                    else:
+                        logging.info('It appears the arkane job failed or was never run for {}'.format(smiles))
 
 
 
-            
+
+
+                
 
