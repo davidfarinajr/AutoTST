@@ -794,6 +794,7 @@ class ThermoJob():
                     os.makedirs(arkane_dir)
 
                 for sp_method in single_point_methods:
+                    
                     label = smiles + '_' + sp_method
                     sp_dir = os.path.join(self.directory,"species",method_name,smiles,"sp")
                     log_path = os.path.join(sp_dir,label + '.log')
@@ -801,6 +802,7 @@ class ThermoJob():
                     if not all([complete,converged]):
                         logging.info("It seems the log file {} is incomplete or didnt converge".format(log_path))
                         continue
+                    mult = ccread(log_path,loglevel=logging.ERROR).mult
                     molecule = self.species.rmg_species[0]
                     if molecule.toSMILES() != smiles:
                         for mol in self.species.rmg_species:
