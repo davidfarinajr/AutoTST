@@ -493,7 +493,9 @@ class ThermoJob():
                             "vary_multiplicity" : False,
                             "rmsd_cutoff" : "default",
                             "energy_cutoff" : "default",
-                            "run_arkane" : True
+                            "run_arkane_dft" : True,
+                            "run_arkane_sp": True,
+                            "dir_path": None
                           }
                           ):
         """
@@ -506,6 +508,13 @@ class ThermoJob():
         method = self.calculator.settings['method'].upper()
         basis_set = self.calculator.settings['basis'].upper()
         method_name = self.method_name
+
+        if options["dir_path"]:
+            dest2 = os.path.join(options["dir_path"],self.method_name)
+            if not os.path.exists(dest2):
+                os.makedirs(dest2)
+        else:
+            dest2 = None
         
         if options["optimize"]:
             for smiles in self.species.smiles:
@@ -648,9 +657,18 @@ class ThermoJob():
                 conformer.update_coords_from("ase")
                 conformer.rmg_molecule.multiplicity = mult
                 self._calculate_fod(conformer=conformer,method_name=method_name)
+                if dest2:
+                    fod_path = os.path.join(
+                        self.directory,
+                        "species",
+                        method_name,
+                        smiles,
+                        smiles + '_fod.log'
+                        )
+                    copyfile(fod_path,os.path.join(dest2,smiles + '_fod.log'))
 
 
-        if options['run_arkane']:
+        if options['run_arkane_dft']:
             ##### run Arkane
             for i,smiles in enumerate(self.species.smiles):
                 logging.info("running arkane for {} with {} method".format(smiles,method_name))
@@ -697,6 +715,9 @@ class ThermoJob():
 
                 if os.path.exists(yml_file):
                     copyfile(yml_file,dest)
+                    if dest2:
+                        copyfile(yml_file,os.path.join(dest2,smiles + '.yml'))
+                        copyfile(log_path,os.path.join(dest2,label + '.log'))
                     logging.info('Arkane job completed successfully!')
 
                 else:
@@ -750,7 +771,7 @@ class ThermoJob():
                             currently_running.remove(name)
                     time.sleep(15)
 
-        if options['run_arkane']:
+        if options['run_arkane_sp']:
 
             single_point_method = self.calculator.settings["sp"]
             if isinstance(single_point_method,str):
@@ -803,16 +824,14 @@ class ThermoJob():
                 yml_file = os.path.join(arkane_calc.directory,'species','1.yml')
                 os.remove(os.path.join(arkane_dir,label + ".log"))
 
-                # dest = os.path.expandvars(os.path.join('$halogen_data','reference_species',"{}".format(sp_method)))
-                # if not os.path.exists(dest):
-                #     os.makedirs(dest)
+                if options['dir_path']:
+                    dest = os.path.join(options['dir_path'],sp_method)
+
+                if not os.path.exists(dest):
+                    os.makedirs(dest)
 
                 if os.path.exists(yml_file):
                     copyfile(yml_file,os.path.join(dest,smiles + '.yml'))
-                    # copyfile(
-                    #     os.path.join(self.directory,"species",method_name,smiles,"sp",'arkane',smiles+'.py'),
-                    #     os.path.join(dest,smiles + '.py')
-                    # )
                     logging.info('Arkane job completed successfully!')
 
                 else:
