@@ -803,7 +803,7 @@ class ThermoJob():
                         logging.info("It seems the log file {} is incomplete or didnt converge".format(log_path))
                         continue
                     dft_label =  "{}_{}_optfreq".format(smiles,method_name)
-                    dft_log = os.path.join(self.directory,"species",method_name,smiles,dft_label+"_optfreq.log")
+                    dft_log = os.path.join(self.directory,"species",method_name,smiles,dft_label+".log")
                     mult = ccread(dft_log,loglevel=logging.ERROR).mult
                     molecule = self.species.rmg_species[0]
                     if molecule.toSMILES() != smiles:
