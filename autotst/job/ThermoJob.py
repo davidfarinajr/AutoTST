@@ -802,7 +802,8 @@ class ThermoJob():
                     if not all([complete,converged]):
                         logging.info("It seems the log file {} is incomplete or didnt converge".format(log_path))
                         continue
-                    mult = ccread(log_path,loglevel=logging.ERROR).mult
+                    dft_log = os.path.join(self.directory,"species",method_name,smiles,label+"_optfreq.log")
+                    mult = ccread(dft_log,loglevel=logging.ERROR).mult
                     molecule = self.species.rmg_species[0]
                     if molecule.toSMILES() != smiles:
                         for mol in self.species.rmg_species:
@@ -821,7 +822,7 @@ class ThermoJob():
                     else:
                         arkane_calc.write_arkane_input()
                     subprocess.Popen(
-                        """sbatch --exclude=c5003,c3040 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p test,general,west -N 1 -n 1 -t 10:00 --mem=1GB $RMGpy/Arkane.py arkane_input.py""".format(arkane_calc.label), 
+                        """sbatch --exclude=c5003,c3040 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p test,general,west,interactive -N 1 -n 1 -t 10:00 --mem=1GB $RMGpy/Arkane.py arkane_input.py""".format(arkane_calc.label), 
                         shell=True, cwd=arkane_calc.directory)
                     time.sleep(10)
                     while not check_complete(label=arkane_calc.label, user=self.discovery_username):
