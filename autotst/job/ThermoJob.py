@@ -590,6 +590,12 @@ class ThermoJob():
                             continue
                         try:
                             parser = ccread(path, loglevel=logging.ERROR)
+                            atoms = read_log(path)
+                            conformer.ase_molecule = atoms
+                            conformer.update_coords_from("ase")
+                            if not check_isomorphic(conformer=conformer,log_path=path):
+                                logging.info("{}_{} is not isomorphic with starting species".format(conformer.smiles, conformer.index))
+                                continue
                             if parser is None:
                                 logging.info(
                                     "Something went wrong when reading in results for {} using cclib...".format(f))
