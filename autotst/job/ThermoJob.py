@@ -20,7 +20,7 @@ import rdkit
 import os
 import time
 import yaml
-from shutil import move, copyfile
+from shutil import move, copyfile, rmtree
 import numpy as np
 import pandas as pd
 import subprocess
@@ -521,6 +521,7 @@ class ThermoJob():
                 got_one = False
                 label =  "{}_{}_optfreq".format(smiles,method_name)
                 log_path = os.path.join(self.calculator.directory,"species",method_name,smiles,label+".log")
+                sp_dir = os.path.join(self.calculator.directory,"species",method_name,smiles,'sp')
                 if os.path.exists(log_path) and not options["recalculate"]:
                     logging.info('It appears we already calculated this species')
                     logging.info('Checking to see if the log is complete and converge...')
@@ -535,11 +536,15 @@ class ThermoJob():
                         else:
                             logging.info('removing existing log and restarting calculation...')
                             os.remove(log_path)
+                            if os.path.exists(sp_dir):
+                                rmtree(sp_dir)
                         
                     else:
                         logging.info('the existing log did not complete or converge')
                         logging.info('removing existing log and restarting calculation...')
                         os.remove(log_path)
+                        if os.path.exists(sp_dir):
+                            rmtree(sp_dir)
 
                 if options["recalculate"] or not got_one:
                     logging.info("Calculating geometries for {}".format(species))
