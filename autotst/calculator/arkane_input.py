@@ -84,7 +84,9 @@ class Arkane_Input():
 
         return path
 
-    def write_arkane_input(self,frequency_scale_factor=1.0, useAtomCorrections=False, useBondCorrections=False, useHinderedRotors=False):
+    def write_arkane_input(self,frequency_scale_factor=1.0, useIsodesmicReactions=False, useAtomCorrections=False, useBondCorrections=False, 
+                            useHinderedRotors=False, constraint_classes=None, n_reactions_max = 50, 
+                            max_ref_uncertainty = None, deviation_coeff = 2.0):
         
         molecule_file_path = os.path.join(self.directory,self.smiles+'.py')
         if not os.path.exists(molecule_file_path):
@@ -92,12 +94,20 @@ class Arkane_Input():
         
         arkane_input_path = os.path.join(self.directory,'arkane_input' +'.py')
     
+        if useIsodesmicReactions is True:
+            useAtomCorrections = useBondCorrections = False
+
         with open(arkane_input_path,'w+') as f:
             f.write('modelChemistry = "{}"\n'.format(self.modelChemistry))
             f.write('frequencyScaleFactor = {}\n'.format(frequency_scale_factor))
             f.write('useAtomCorrections = {}\n'.format(useAtomCorrections))
             f.write('useBondCorrections = {}\n'.format(useBondCorrections))
             f.write('useHinderedRotors = {}\n'.format(useHinderedRotors))
+            if useIsodesmicReactions is True:
+                f.write('useIsodesmicReactions = {}\n'.format(useIsodesmicReactions))
+                f.write('n_reactions_max = {}\n'.format(n_reactions_max))
+                f.write('max_ref_uncertainty = {}\n'.format(n_reactions_max))
+                f.write('deviation_coeff = {}\n'.format(n_reactions_max))
             f.write('\n')
             f.write('species("{0}","./{1}.py",structure = SMILES("{1}"))\n'.format(1,self.smiles))
             f.write('\n')

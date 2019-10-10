@@ -701,13 +701,10 @@ class ThermoJob():
                 molecule.multiplicity = mult
                 arkane_calc = Arkane_Input(molecule=molecule,modelChemistry=method_name,directory=arkane_dir,gaussian_log_path=log_path)
                 arkane_calc.write_molecule_file()
-                arkane_calc.write_arkane_input()
+                arkane_calc.write_arkane_input(useIsodesmicReactions=True,n_reactions_max=50)
                 subprocess.Popen(
-                    """sbatch --exclude=c5003,c3040 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p test,general,west -N 1 -n 1 -t 10:00 --mem=1GB $RMGpy/Arkane.py arkane_input.py""".format(arkane_calc.label), 
+                    """python $RMGpy/Arkane.py arkane_input.py""", 
                     shell=True, cwd=arkane_calc.directory)
-                time.sleep(15)
-                while not check_complete(label=arkane_calc.label, user=self.discovery_username):
-                    time.sleep(10)
 
                 yml_file = os.path.join(arkane_calc.directory,'species','1.yml')
                 os.remove(os.path.join(arkane_dir,label + ".log"))
@@ -825,15 +822,13 @@ class ThermoJob():
                     gaussian_log_path=log_path)
                     arkane_calc.write_molecule_file()
                     if 'G' in sp_method:
-                        arkane_calc.write_arkane_input(frequency_scale_factor=0.9854)
+                        arkane_calc.write_arkane_input(frequency_scale_factor=0.9854,useIsodesmicReactions=True,n_reactions_max=50)
                     else:
-                        arkane_calc.write_arkane_input()
+                        arkane_calc.write_arkane_input(useIsodesmicReactions=True,n_reactions_max=50)
+                    
                     subprocess.Popen(
-                        """sbatch --exclude=c5003,c3040 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p test,general,west,interactive -N 1 -n 1 -t 10:00 --mem=1GB $RMGpy/Arkane.py arkane_input.py""".format(arkane_calc.label), 
+                        """python $RMGpy/Arkane.py arkane_input.py""", 
                         shell=True, cwd=arkane_calc.directory)
-                    time.sleep(10)
-                    while not check_complete(label=arkane_calc.label, user=self.discovery_username):
-                        time.sleep(10)
 
                     yml_file = os.path.join(arkane_calc.directory,'species','1.yml')
                     os.remove(os.path.join(arkane_dir,label + ".log"))
