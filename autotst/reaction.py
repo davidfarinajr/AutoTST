@@ -83,13 +83,15 @@ class Reaction():
     families = [  # These families (and only these) will be loaded from both RMG and AutoTST databases
             "R_Addition_MultipleBond",
             "H_Abstraction",
-            "intra_H_migration"]
+            "intra_H_migration",
+            "F_Abstraction"]
     try:
         rmg_database.load(
                     database_path,
                     kineticsFamilies=["R_Addition_MultipleBond",
                                         "H_Abstraction",
-                                        "intra_H_migration"],
+                                        "intra_H_migration",
+                                        "F_Abstraction"],
                     transportLibraries=[],
                     reactionLibraries=[],
                     seedMechanisms=[],
@@ -108,7 +110,7 @@ class Reaction():
             "Loading RMG database instead from '{}'".format(database_path))
         rmg_database.load(
             database_path,
-            kineticsFamilies=self.possible_families,
+            kineticsFamilies=families,
             transportLibraries=[],
             reactionLibraries=[],
             seedMechanisms=[],
@@ -141,7 +143,8 @@ class Reaction():
         self.possible_families = [  # These families (and only these) will be loaded from both RMG and AutoTST databases
             "R_Addition_MultipleBond",
             "H_Abstraction",
-            "intra_H_migration"
+            "intra_H_migration",
+            "F_Abstraction"
         ]
 
         self.label = label
@@ -232,7 +235,8 @@ class Reaction():
         self.possible_families = [  # These families (and only these) will be loaded from both RMG and AutoTST databases
             "R_Addition_MultipleBond",
             "H_Abstraction",
-            "intra_H_migration"
+            "intra_H_migration",
+            "F_Abstraction"
         ]
         try:
             rmg_database.load(
@@ -393,7 +397,7 @@ class Reaction():
                 try:
                     labeled_r, labeled_p = family.getLabeledReactantsAndProducts(
                         test_reaction.reactants, test_reaction.products)
-                except ValueError:
+                except:
                     continue
                     
                 if not (labeled_r and labeled_p):
