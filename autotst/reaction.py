@@ -861,7 +861,8 @@ class TS(Conformer):
         if self.reaction_family.lower() in [
             'h_abstraction',
             'r_addition_multiplebond',
-            'intra_h_migration']:
+            'intra_h_migration',
+            'f_abstraction']:
             # for i, atom in enumerate(reactants.atoms):
             lbl1 = self.rmg_molecule.getLabeledAtoms()["*1"].sortingLabel
             lbl2 = self.rmg_molecule.getLabeledAtoms()["*2"].sortingLabel
