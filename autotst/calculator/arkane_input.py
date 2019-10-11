@@ -86,7 +86,7 @@ class Arkane_Input():
 
     def write_arkane_input(self,frequency_scale_factor=1.0, useIsodesmicReactions=False, useAtomCorrections=False, useBondCorrections=False, 
                             useHinderedRotors=False, constraint_classes=None, n_reactions_max = 50, 
-                            max_ref_uncertainty = None, deviation_coeff = 2.0):
+                            max_ref_uncertainty = None, deviation_coeff = 3.0):
         
         molecule_file_path = os.path.join(self.directory,self.smiles+'.py')
         if not os.path.exists(molecule_file_path):
