@@ -106,7 +106,7 @@ class Arkane_Input():
             if useIsodesmicReactions is True:
                 f.write('useIsodesmicReactions = {}\n'.format(useIsodesmicReactions))
                 f.write('n_reactions_max = {}\n'.format(n_reactions_max))
-                f.write('max_ref_uncertainty = {}\n'.format(max_ref_uncertainty)
+                f.write('max_ref_uncertainty = {}\n'.format(max_ref_uncertainty))
                 f.write('deviation_coeff = {}\n'.format(deviation_coeff))
             f.write('\n')
             f.write('species("{0}","./{1}.py",structure = SMILES("{1}"))\n'.format(1,self.smiles))
