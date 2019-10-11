@@ -518,10 +518,11 @@ class ThermoJob():
         
         if options["optimize"]:
             for smiles in self.species.smiles:
-                got_one = False
                 label =  "{}_{}_optfreq".format(smiles,method_name)
                 log_path = os.path.join(self.calculator.directory,"species",method_name,smiles,label+".log")
                 sp_dir = os.path.join(self.calculator.directory,"species",method_name,smiles,'sp')
+                if not os.path.exists(log_path):
+                    got_one = False
                 if os.path.exists(log_path) and not options["recalculate"]:
                     logging.info('It appears we already calculated this species')
                     logging.info('Checking to see if the log is complete and converge...')
@@ -534,19 +535,23 @@ class ThermoJob():
                             got_one = True
                             logging.info('The existing log has been verified')
                         else:
+                            got_one = False
                             logging.info('removing existing log and restarting calculation...')
                             os.remove(log_path)
                             if os.path.exists(sp_dir):
                                 rmtree(sp_dir)
                         
                     else:
+                        got_one = False
                         logging.info('the existing log did not complete or converge')
                         logging.info('removing existing log and restarting calculation...')
                         os.remove(log_path)
                         if os.path.exists(sp_dir):
                             rmtree(sp_dir)
 
-                if options["recalculate"] or not got_one:
+                if (options["recalculate"] is False) and (got_one is True):
+                    continue
+                else:
                     logging.info("Calculating geometries for {}".format(species))
 
                     if self.conformer_calculator:
@@ -695,6 +700,8 @@ class ThermoJob():
 
                 label =  "{}_{}_optfreq".format(smiles,method_name)
                 log_path = os.path.join(self.directory,"species",method_name,smiles,label+".log")
+                if not os.path.exists(log_path):
+                    continue
                 mult = ccread(log_path,loglevel=logging.ERROR).mult
                 copyfile(log_path,os.path.join(arkane_dir,label + ".log"))
                 molecule = self.species.rmg_species[i]
@@ -707,11 +714,16 @@ class ThermoJob():
                 arkane_calc = Arkane_Input(molecule=molecule,modelChemistry=method_name,directory=arkane_dir,gaussian_log_path=log_path)
                 arkane_calc.write_molecule_file()
                 arkane_calc.write_arkane_input(useIsodesmicReactions=True,n_reactions_max=50)
-                subprocess.Popen(
-                    """python $RMGpy/Arkane.py arkane_input.py""", 
-                    shell=True, cwd=arkane_calc.directory)
-
-                yml_file = os.path.join(arkane_calc.directory,'species','1.yml')
+                yml_file = os.path.join(arkane_dir,'species','1.yml')
+                if os.path.exists(yml_file):
+                    logging.info("It appears the arkane job has already been run")
+                else:
+                    subprocess.Popen(
+                        """python $RMGpy/Arkane.py arkane_input.py""", 
+                        shell=True, cwd=arkane_calc.directory)
+                    while not os.path.exists(yml_file):
+                        time.sleep(10)
+                time.sleep(5)
                 os.remove(os.path.join(arkane_dir,label + ".log"))
                 dest = os.path.join(
                     self.directory,
@@ -722,15 +734,23 @@ class ThermoJob():
                 )
 
                 if os.path.exists(yml_file):
+                    arkane_out = os.path.join(arkane_dir,'output.py')
+                    arkane_supporting = os.path.join(arkane_dir,'supporting_information.csv')
                     copyfile(yml_file,dest)
                     if dest2:
-                        copyfile(yml_file,os.path.join(dest2,smiles + '.yml'))
-                        copyfile(log_path,os.path.join(dest2,label + '.log'))
+                        copyfile(arkane_out,os.path.join(dest2,smiles + '_arkaneOutput.py'))
+                        try:
+                            copyfile(arkane_supporting,os.path.join(dest2,smiles + '_arkaneSupporting.csv'))
+                            copyfile(yml_file,os.path.join(dest2,smiles + '.yml'))
+                        except:
+                            pass
+                        #copyfile(log_path,os.path.join(dest2,label + '.log'))
                     logging.info('Arkane job completed successfully!')
 
                 else:
                     logging.info('It appears the arkane job failed or was never run for {}'.format(smiles))
-        
+                    continue
+
         if options["run_sp"]:
             for smiles in self.species.smiles:
                 label =  "{}_{}".format(smiles,method_name)
@@ -830,13 +850,21 @@ class ThermoJob():
                         arkane_calc.write_arkane_input(frequency_scale_factor=0.9854,useIsodesmicReactions=True,n_reactions_max=50)
                     else:
                         arkane_calc.write_arkane_input(useIsodesmicReactions=True,n_reactions_max=50)
+                    yml_file = os.path.join(arkane_dir,'species','1.yml')
                     
-                    subprocess.Popen(
-                        """python $RMGpy/Arkane.py arkane_input.py""", 
-                        shell=True, cwd=arkane_calc.directory)
-
-                    yml_file = os.path.join(arkane_calc.directory,'species','1.yml')
+                    if os.path.exists(yml_file):
+                        logging.info("It appears the arkane job has already been run")
+                    else:
+                        logging.info("staring arkane calc for {}".format(label))
+                        subprocess.Popen(
+                            """python $RMGpy/Arkane.py arkane_input.py""", 
+                            shell=True, cwd=arkane_calc.directory)
+                        while not os.path.exists(yml_file):
+                            time.sleep(10)
+                    time.sleep(5)
                     os.remove(os.path.join(arkane_dir,label + ".log"))
+                    arkane_out = os.path.join(arkane_dir,'output.py')
+                    arkane_supporting = os.path.join(arkane_dir,'supporting_information.csv')
 
                     if options['dir_path']:
                         dest = os.path.join(options['dir_path'],sp_method)
@@ -846,10 +874,16 @@ class ThermoJob():
 
                     if os.path.exists(yml_file):
                         copyfile(yml_file,os.path.join(dest,smiles + '.yml'))
+                        try:
+                            copyfile(arkane_out,os.path.join(dest,smiles + '_arkaneOutput.py'))
+                            copyfile(arkane_supporting,os.path.join(dest,smiles + '_arkaneSupporting.csv'))
+                        except:
+                            pass
                         logging.info('Arkane job completed successfully!')
 
                     else:
                         logging.info('It appears the arkane job failed or was never run for {}'.format(smiles))
+                        continue
 
 
 
