@@ -71,6 +71,10 @@ class Arkane_Input():
         geometry_path = os.path.basename(self.geometry_log_path)
         frequencies_path = os.path.basename(self.frequencies_log_path)
 
+        if sym_num == 0.5:
+            logging.warning("RMG sym number is 0.5!  Setting sym number to 1.0")
+            sym_num = 1.0
+
         with open(path,'w+') as f:
             f.write('#SMILES = {}\n'.format(self.smiles))
             f.write('linear = {}\n'.format(linear))
