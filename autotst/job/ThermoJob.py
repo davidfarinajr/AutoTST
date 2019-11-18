@@ -62,16 +62,16 @@ def check_isomorphic(conformer,log_path):
     to the SMILES of the passed in 'conformer'
     """
     starting_molecule = RMGMolecule(SMILES=conformer.smiles)
-    starting_molecule = starting_molecule.toSingleBonds()
+    starting_molecule = starting_molecule.to_single_bonds()
 
     atoms = read_log(log_path)
 
     test_molecule = RMGMolecule()
-    test_molecule.fromXYZ(
+    test_molecule.from_xyz(
         atoms.arrays["numbers"],
         atoms.arrays["positions"]
     )
-    if not starting_molecule.isIsomorphic(test_molecule):
+    if not starting_molecule.is_isomorphic(test_molecule):
         logging.info(
             "Output geometry of {} is not isomorphic with input geometry".format(log_path))
         return False
@@ -705,9 +705,9 @@ class ThermoJob():
                 mult = ccread(log_path,loglevel=logging.ERROR).mult
                 copyfile(log_path,os.path.join(arkane_dir,label + ".log"))
                 molecule = self.species.rmg_species[i]
-                if molecule.toSMILES() != smiles:
+                if molecule.to_smiles() != smiles:
                     for mol in self.species.rmg_species:
-                        if mol.toSMILES() == smiles:
+                        if mol.to_smiles() == smiles:
                             molecule = mol
                             break
                 molecule.multiplicity = mult
@@ -834,9 +834,9 @@ class ThermoJob():
                     dft_log = os.path.join(self.directory,"species",method_name,smiles,dft_label+".log")
                     mult = ccread(dft_log,loglevel=logging.ERROR).mult
                     molecule = self.species.rmg_species[0]
-                    if molecule.toSMILES() != smiles:
+                    if molecule.to_smiles() != smiles:
                         for mol in self.species.rmg_species:
-                            if mol.toSMILES() == smiles:
+                            if mol.to_smiles() == smiles:
                                 molecule = mol
                                 break
                     molecule.multiplicity = mult

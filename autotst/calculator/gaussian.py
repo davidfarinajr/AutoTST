@@ -278,7 +278,7 @@ class Gaussian():
             dispersion = 'EmpiricalDispersion={}'.format(dispersion)
 
         self.settings["mem"] = '10GB'
-        num_atoms = self.conformer.rmg_molecule.getNumAtoms()
+        num_atoms = self.conformer.rmg_molecule.get_num_atoms()
         
         if num_atoms <= 4:
             self.settings["nprocshared"] = 1
@@ -353,7 +353,7 @@ class Gaussian():
         assert method in gaussian_methods
 
         self.settings["time"] = "24:00:00"
-        num_atoms = self.conformer.rmg_molecule.getNumAtoms()
+        num_atoms = self.conformer.rmg_molecule.get_num_atoms()
         
         if num_atoms <= 18:
             self.settings["mem"] = '100GB'
@@ -370,7 +370,7 @@ class Gaussian():
         assert isinstance(
             self.conformer, Conformer), "A Conformer object was not provided..."
 
-        #self.conformer.rmg_molecule.updateMultiplicity()
+        #self.conformer.rmg_molecule.update_multiplicity()
 
         label = "{}_{}".format(self.conformer.smiles, method)
 
