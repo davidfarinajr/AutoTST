@@ -164,7 +164,7 @@ class VibrationalAnalysis():
         for atom_num, coords in zip(parser.atomnos, parser.atomcoords[-1]):
             atoms.append(Atom(symbol=symbol_dict[atom_num], position=coords))
         
-        self.ts.ase_molecule = Atoms(atoms)
+        self.ts._ase_molecule = Atoms(atoms)
         self.ts.update_coords_from("ase")
         self.ts.get_geometries()
 
@@ -252,7 +252,7 @@ class VibrationalAnalysis():
                 logging.info(
                     "Cannot reasonably say that we have arrived at a TS through vibrational analysis.")
                 return False
-        except:
+        except AssertionError:
             logging.info("Something went wrong when attempting vibrational analysis...")
             logging.info("Cannot verify via vibrational analysis")
             return False

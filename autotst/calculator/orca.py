@@ -122,19 +122,10 @@ class Orca():
             self.base = self.label.replace('(', '{').replace(')', '}').replace('#', '=-')
         else:
             self.base = self.label
+  
+        self.charge = self.conformer.rmg_molecule.get_net_charge()
+        self.mult = self.conformer.rmg_molecule.multiplicity
 
-        # Try to get property and assign as instance attribute
-        # Else assign charge attribute as None
-        try:
-            self.charge = self.conformer.rmg_molecule.getNetCharge()
-        except:
-            logging.warning('could not get charge for conformer...setting charge to None')
-            self.charge = None
-        try:
-            self.mult = self.conformer.rmg_molecule.multiplicity
-        except:
-            logging.warning('could not get mulitpicity of conformer...setting multiplicty to None')
-            self.mult = None
         try:
             self.coords = self.conformer.get_xyz_block()
         except:
@@ -169,7 +160,7 @@ class Orca():
             f.write('# FOD anaylsis for {} \n'.format(self.label))
             f.write('! FOD \n')
             f.write('\n')
-            f.write('%pal nprocs 4 end \n')
+            f.write('%pal nprocs {} end \n'.format(str(self.nprocs)))
             f.write('%scf\n  MaxIter  600\nend\n')
             f.write('%base "{}_fod" \n'.format(self.base))
             f.write('*xyz {} {}\n'.format(self.charge, self.mult))
@@ -470,7 +461,7 @@ class Orca():
         """
         assert os.path.exists(path),'It seems {} is not a valid path'.format(path)
 
-        if self.check_NormalTermination(path):
+        if self.check_normal_termination(path):
             N_FOD = None
             for line in open(path,'r').readlines():
                 if 'N_FOD =' in line:

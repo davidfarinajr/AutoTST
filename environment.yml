@@ -1,12 +1,19 @@
 name: tst_env
 channels:
   - defaults
+  - rdkit
+  - krsna
   - rmg
+  - cantera
+  - pytorch
+  - ampayne
+  - anaconda
   - conda-forge
 dependencies:
-  - rmg == 2.3.0
+  - python
+  - rmg == 3.0.0b
   - ase
-  - cclib
+  - cclib == 1.6.2 
   - py3dmol
   - rdkit
   - nose
