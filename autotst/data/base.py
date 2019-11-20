@@ -391,7 +391,7 @@ class TransitionStateDepository(Database):
 
     def __init__(self, label='', name='', shortDesc='', longDesc=''):
         Database.__init__(self, label=label, name=name,
-                          shortDesc=shortDesc, longDesc=longDesc)
+                          short_desc=shortDesc, long_desc=longDesc)
 
     def __repr__(self):
         return '<TransitionStateDepository "{0}">'.format(self.label)
