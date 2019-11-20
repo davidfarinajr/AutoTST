@@ -250,9 +250,9 @@ class TransitionStates(Database):
         f.write('#!/usr/bin/env python\n')
         f.write('# encoding: utf-8\n\n')
         f.write('name = "{0}"\n'.format(self.groups.name))
-        f.write('shortDesc = u"{0}"\n'.format(self.groups.shortDesc))
-        f.write('longDesc = u"""\n')
-        f.write(self.groups.longDesc)
+        f.write('short_desc = u"{0}"\n'.format(self.groups.short_desc))
+        f.write('long_desc = u"""\n')
+        f.write(self.groups.long_desc)
         f.write('\n"""\n\n')
 
         # Save the entries
@@ -354,22 +354,22 @@ class TransitionStates(Database):
         if entry.rank is not None:
             f.write('    rank = {0},\n'.format(entry.rank))
 
-        if entry.shortDesc.strip() != '':
-            f.write('    shortDesc = u"""')
+        if entry.short_desc.strip() != '':
+            f.write('    short_desc = u"""')
             try:
-                f.write(entry.shortDesc.encode('utf-8'))
+                f.write(entry.short_desc.encode('utf-8'))
             except:
-                f.write(entry.shortDesc.strip().encode(
+                f.write(entry.short_desc.strip().encode(
                     'ascii', 'ignore') + "\n")
             f.write('""",\n')
 
-        if entry.longDesc.strip() != '':
-            f.write('    longDesc = \n')
+        if entry.long_desc.strip() != '':
+            f.write('    long_desc = \n')
             f.write('u"""\n')
             try:
-                f.write(entry.longDesc.strip().encode('utf-8') + "\n")
+                f.write(entry.long_desc.strip().encode('utf-8') + "\n")
             except:
-                f.write(entry.longDesc.strip().encode(
+                f.write(entry.long_desc.strip().encode(
                     'ascii', 'ignore') + "\n")
             f.write('""",\n')
 
@@ -389,9 +389,9 @@ class TransitionStateDepository(Database):
     real reactant and product species.
     """
 
-    def __init__(self, label='', name='', shortDesc='', longDesc=''):
+    def __init__(self, label='', name='', short_desc='', long_desc=''):
         Database.__init__(self, label=label, name=name,
-                          short_desc=shortDesc, long_desc=longDesc)
+                          short_desc=short_desc, long_desc=long_desc)
 
     def __repr__(self):
         return '<TransitionStateDepository "{0}">'.format(self.label)
@@ -459,8 +459,8 @@ class TransitionStateDepository(Database):
                   reversible=True,
                   reference=None,
                   reference_type='',
-                  shortDesc='',
-                  longDesc='',
+                  short_desc='',
+                  long_desc='',
                   rank=None,
                   ):
 
@@ -474,8 +474,8 @@ class TransitionStateDepository(Database):
             data=distances,
             reference=reference,
             reference_type=reference_type,
-            shortDesc=shortDesc,
-            longDesc=longDesc.strip(),
+            short_desc=short_desc,
+            long_desc=long_desc.strip(),
             rank=rank,
         )
         self.entries['{0:d}:{1}'.format(index, label)] = entry
@@ -567,22 +567,22 @@ class TransitionStateDepository(Database):
         if entry.rank is not None:
             f.write('    rank = {0},\n'.format(entry.rank))
 
-        if entry.shortDesc.strip() != '':
-            f.write('    shortDesc = u"""')
+        if entry.short_desc.strip() != '':
+            f.write('    short_desc = u"""')
             try:
-                f.write(entry.shortDesc.encode('utf-8'))
+                f.write(entry.short_desc.encode('utf-8'))
             except:
-                f.write(entry.shortDesc.strip().encode(
+                f.write(entry.short_desc.strip().encode(
                     'ascii', 'ignore') + "\n")
             f.write('""",\n')
 
-        if entry.longDesc.strip() != '':
-            f.write('    longDesc = \n')
+        if entry.long_desc.strip() != '':
+            f.write('    long_desc = \n')
             f.write('u"""\n')
             try:
-                f.write(entry.longDesc.strip().encode('utf-8') + "\n")
+                f.write(entry.long_desc.strip().encode('utf-8') + "\n")
             except:
-                f.write(entry.longDesc.strip().encode(
+                f.write(entry.long_desc.strip().encode(
                     'ascii', 'ignore') + "\n")
             f.write('""",\n')
 
@@ -603,15 +603,15 @@ class TSGroups(Database):
                  top=None,
                  label='',
                  name='',
-                 shortDesc='',
-                 longDesc='',
+                 short_desc='',
+                 long_desc='',
                  forward_template=None,
                  forward_recipe=None,
                  reverse_template=None,
                  reverse_recipe=None,
                  forbidden=None
                  ):
-        Database.__init__(self, entries, top, label, name, shortDesc, longDesc)
+        Database.__init__(self, entries, top, label, name, short_desc, long_desc)
         self.num_reactants = 0
 
     def __repr__(self):
@@ -625,8 +625,8 @@ class TSGroups(Database):
             distances,
             reference=None,
             reference_type='',
-            shortDesc='',
-            longDesc=''):
+            short_desc='',
+            long_desc=''):
         if group[0:3].upper() == 'OR{' or group[0:4].upper(
         ) == 'AND{' or group[0:7].upper() == 'NOT OR{' or group[0:8].upper() == 'NOT AND{':
             item = make_logic_node(group)
@@ -639,8 +639,8 @@ class TSGroups(Database):
             data=distances,
             reference=reference,
             reference_type=reference_type,
-            shortDesc=shortDesc,
-            longDesc=longDesc.strip(),
+            short_desc=short_desc,
+            long_desc=long_desc.strip(),
         )
 
     def get_reaction_template(self, reaction):
@@ -755,7 +755,7 @@ class TSGroups(Database):
             if entry.data.distances and entry not in self.top:
                 ts_distances.add(entry.data)
                 comment_line += "{0} ({1})".format(entry.label,
-                                                   entry.longDesc.split('\n')[0])
+                                                   entry.long_desc.split('\n')[0])
             elif entry in self.top:
                 comment_line += "{0} (Top node)".format(entry.label)
             ts_distances.comment += comment_line + '\n'
@@ -919,9 +919,9 @@ class TSGroups(Database):
                     else:
                         uncertainties = {}
                     # should be entry.*
-                    shortDesc = "Fitted to {0} distances.\n".format(
+                    short_desc = "Fitted to {0} distances.\n".format(
                         group_counts[entry][0])
-                    longDesc = "\n".join(group_comments[entry.label])
+                    long_desc = "\n".join(group_comments[entry.label])
                     distances_dict = {key: distance for key, distance in zip(
                         distance_keys, group_values[entry])}
                     uncertainties_dict = {
@@ -930,8 +930,8 @@ class TSGroups(Database):
                     entry.data = DistanceData(
                         distances=distances_dict,
                         uncertainties=uncertainties_dict)
-                    entry.shortDesc = shortDesc
-                    entry.longDesc = longDesc
+                    entry.short_desc = short_desc
+                    entry.long_desc = long_desc
                 else:
                     entry.data = DistanceData()
 
