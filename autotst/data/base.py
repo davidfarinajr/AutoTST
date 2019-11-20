@@ -625,8 +625,8 @@ class TSGroups(Database):
             distances,
             reference=None,
             reference_type='',
-            short_desc='',
-            long_desc=''):
+            shortDesc='',
+            longDesc=''):
         if group[0:3].upper() == 'OR{' or group[0:4].upper(
         ) == 'AND{' or group[0:7].upper() == 'NOT OR{' or group[0:8].upper() == 'NOT AND{':
             item = make_logic_node(group)
@@ -639,8 +639,8 @@ class TSGroups(Database):
             data=distances,
             reference=reference,
             reference_type=reference_type,
-            short_desc=short_desc,
-            long_desc=long_desc.strip(),
+            short_desc=shortDesc,
+            long_desc=longDesc,
         )
 
     def get_reaction_template(self, reaction):
