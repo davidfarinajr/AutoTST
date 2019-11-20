@@ -68,29 +68,29 @@ def read_log(file_path=None):
         return Atoms(atoms)
 
 def write_input(conformer, ase_calculator):
-        """
-        A helper method that will write an input file and move it to the correct scratch directory
-        """
+    """
+    A helper method that will write an input file and move it to the correct scratch directory
+    """
 
-        ase_calculator.write_input(conformer.ase_molecule)
-        try:
-            os.makedirs(ase_calculator.scratch)
-        except OSError:
-            pass
+    ase_calculator.write_input(conformer.ase_molecule)
+    try:
+        os.makedirs(ase_calculator.scratch)
+    except OSError:
+        pass
 
-        move(
-            ase_calculator.label + ".com",
-            os.path.join(
-                ase_calculator.scratch,
-                ase_calculator.label + ".com"
-            ))
+    move(
+        ase_calculator.label + ".com",
+        os.path.join(
+            ase_calculator.scratch,
+            ase_calculator.label + ".com"
+        ))
 
-        move(
-            ase_calculator.label + ".ase",
-            os.path.join(
-                ase_calculator.scratch,
-                ase_calculator.label + ".ase"
-            ))
+    move(
+        ase_calculator.label + ".ase",
+        os.path.join(
+            ase_calculator.scratch,
+            ase_calculator.label + ".ase"
+        ))
 import rmgpy
 from rmgpy.molecule import Molecule as RMGMolecule
 from rmgpy.reaction import Reaction as RMGReaction
@@ -273,7 +273,6 @@ class Gaussian():
         dispersion = self.settings["dispersion"].upper()
         convergence = self.settings["convergence"].upper()
 
-
         if dispersion:
             dispersion = 'EmpiricalDispersion={}'.format(dispersion)
 
@@ -335,6 +334,7 @@ class Gaussian():
             multiplicity=self.conformer.rmg_molecule.multiplicity)
         ase_gaussian.atoms = self.conformer.ase_molecule
         ase_gaussian.directory = new_scratch
+        ase_gaussian.label = label
         ase_gaussian.parameters["partition"] = self.settings["partition"]
         ase_gaussian.parameters["time"] = self.settings["time"]
         del ase_gaussian.parameters['force']
@@ -399,6 +399,7 @@ class Gaussian():
             multiplicity=self.conformer.rmg_molecule.multiplicity)
         ase_gaussian.atoms = self.conformer.ase_molecule
         ase_gaussian.directory = new_scratch
+        ase_gaussian.label = label
         ase_gaussian.parameters["partition"] = self.settings["partition"]
         ase_gaussian.parameters["time"] = self.settings["time"]
         del ase_gaussian.parameters['force']

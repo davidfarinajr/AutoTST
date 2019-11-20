@@ -459,8 +459,8 @@ class TransitionStateDepository(Database):
                   reversible=True,
                   reference=None,
                   reference_type='',
-                  short_desc='',
-                  long_desc='',
+                  shortDesc='',
+                  longDesc='',
                   rank=None,
                   ):
 
@@ -474,8 +474,8 @@ class TransitionStateDepository(Database):
             data=distances,
             reference=reference,
             reference_type=reference_type,
-            short_desc=short_desc,
-            long_desc=long_desc.strip(),
+            short_desc=shortDesc,
+            long_desc=longDesc.strip(),
             rank=rank,
         )
         self.entries['{0:d}:{1}'.format(index, label)] = entry
@@ -568,7 +568,7 @@ class TransitionStateDepository(Database):
             f.write('    rank = {0},\n'.format(entry.rank))
 
         if entry.short_desc.strip() != '':
-            f.write('    short_desc = u"""')
+            f.write('    shortDesc = u"""')
             try:
                 f.write(entry.short_desc.encode('utf-8'))
             except:
@@ -577,7 +577,7 @@ class TransitionStateDepository(Database):
             f.write('""",\n')
 
         if entry.long_desc.strip() != '':
-            f.write('    long_desc = \n')
+            f.write('    longDesc = \n')
             f.write('u"""\n')
             try:
                 f.write(entry.long_desc.strip().encode('utf-8') + "\n")

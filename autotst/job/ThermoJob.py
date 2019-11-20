@@ -50,8 +50,7 @@ def check_complete(label, user):
         command,
         shell=True,
         stdout=subprocess.PIPE).communicate()[0]
-    
-    if len(output.split("\n")) <= 2:
+    if len(output.decode("utf-8").splitlines()) <= 1:
         return True
     else:
         return False
@@ -849,7 +848,8 @@ class ThermoJob():
                     if 'G' in sp_method:
                         arkane_calc.write_arkane_input(frequency_scale_factor=0.9854,useIsodesmicReactions=True,n_reactions_max=50)
                     else:
-                        arkane_calc.write_arkane_input(useIsodesmicReactions=True,n_reactions_max=50)
+                        #arkane_calc.write_arkane_input(useIsodesmicReactions=True,n_reactions_max=50)
+                        arkane_calc.write_arkane_input(useIsodesmicReactions=False,useBondCorrections=False,useAtomCorrections=False)
                     yml_file = os.path.join(arkane_dir,'species','1.yml')
                     
                     if os.path.exists(yml_file):
