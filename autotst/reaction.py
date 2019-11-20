@@ -88,14 +88,14 @@ class Reaction():
     try:
         rmg_database.load(
                     database_path,
-                    kineticsFamilies=["R_Addition_MultipleBond",
+                    kinetics_families=["R_Addition_MultipleBond",
                                         "H_Abstraction",
                                         "intra_H_migration",
                                         "F_Abstraction"],
-                    transportLibraries=[],
-                    reactionLibraries=[],
-                    seedMechanisms=[],
-                    thermoLibraries=[
+                    transport_libraries=[],
+                    reaction_libraries=[],
+                    seed_mechanisms=[],
+                    thermo_libraries=[
                         'primaryThermoLibrary',
                         'thermo_DFT_CCSDTF12_BAC',
                         'CBS_QB3_1dHR'],
@@ -110,11 +110,11 @@ class Reaction():
             "Loading RMG database instead from '{}'".format(database_path))
         rmg_database.load(
             database_path,
-            kineticsFamilies=families,
-            transportLibraries=[],
-            reactionLibraries=[],
-            seedMechanisms=[],
-            thermoLibraries=[
+            kinetics_families=families,
+            transport_libraries=[],
+            reaction_libraries=[],
+            seed_mechanisms=[],
+            thermo_libraries=[
                 'primaryThermoLibrary',
                 'thermo_DFT_CCSDTF12_BAC',
                 'CBS_QB3_1dHR'],
