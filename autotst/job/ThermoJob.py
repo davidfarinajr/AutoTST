@@ -60,7 +60,7 @@ def check_isomorphic(conformer,log_path):
     Compares whatever is in the log file  
     to the SMILES of the passed in 'conformer'
     """
-    starting_molecule = RMGMolecule(SMILES=conformer.smiles)
+    starting_molecule = RMGMolecule(smiles=conformer.smiles)
     starting_molecule = starting_molecule.to_single_bonds()
 
     atoms = read_log(log_path)
