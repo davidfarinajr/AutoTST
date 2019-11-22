@@ -46,7 +46,7 @@ class Arkane_Input():
         
         self.molecule = molecule
         self.modelChemistry = modelChemistry
-        self.smiles = self.molecule.toSMILES()
+        self.smiles = self.molecule.to_smiles()
         self.label = self.smiles + '_arkane'
         self.directory = directory
         if gaussian_log_path:
@@ -63,8 +63,8 @@ class Arkane_Input():
         if not os.path.exists(self.directory):
             os.makedirs(self.directory)
 
-        linear = self.molecule.isLinear()
-        sym_num = self.molecule.calculateSymmetryNumber()
+        linear = self.molecule.is_linear()
+        sym_num = self.molecule.calculate_symmetry_number()
         mult = self.molecule.multiplicity
         path = os.path.join(self.directory,self.smiles+'.py')
         energy_path = os.path.basename(self.energy_log_path)

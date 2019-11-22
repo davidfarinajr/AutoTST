@@ -253,7 +253,7 @@ class ThermoJob():
 
             logging.info("Resubmitting {} with default convergence criteria".format(conformer))
             atoms = read_log(log_path)
-            conformer.ase_molecule = atoms
+            conformer._ase_molecule = atoms
             conformer.update_coords_from("ase")
             self.calculator.conformer = conformer
             self.calculator.settings["convergence"] = ""
@@ -300,8 +300,8 @@ class ThermoJob():
             "species",
             method_name,
             conformer.smiles,
-            "sp"
-        )
+            "sp")
+        calc.label = "{}_{}".format(conformer.smiles, sp_method)
         label = calc.label
         log_path = os.path.join(calc.scratch,calc.label + ".log")
         logging.info(
@@ -342,7 +342,7 @@ class ThermoJob():
             logging.info("{} did not converge, trying it as a looser convergence criteria".format(calc.label))
             logging.info("Resubmitting {} with default convergence criteria".format(conformer))
             atoms = read_log(log_path)
-            conformer.ase_molecule = atoms
+            conformer._ase_molecule = atoms
             conformer.update_coords_from("ase")
             self.calculator.conformer = conformer
             self.calculator.settings["convergence"] = ""
@@ -600,7 +600,7 @@ class ThermoJob():
                         try:
                             parser = ccread(path, loglevel=logging.ERROR)
                             atoms = read_log(path)
-                            conformer.ase_molecule = atoms
+                            conformer._ase_molecule = atoms
                             conformer.update_coords_from("ase")
                             if not check_isomorphic(conformer=conformer,log_path=path):
                                 logging.info("{}_{} is not isomorphic with starting species".format(conformer.smiles, conformer.index))
@@ -650,11 +650,11 @@ class ThermoJob():
                         lowest_energy_file))
 
                     parser = ccread(dest, loglevel=logging.ERROR)
-                    xyzpath = os.path.join(self.calculator.directory,"species",method_name,conformer.smiles,label+".xyz")
-                    parser.writexyz(xyzpath)
+                    # xyzpath = os.path.join(self.calculator.directory,"species",method_name,conformer.smiles,label+".xyz")
+                    # parser.writexyz(xyzpath)
 
-                    logging.info("The lowest energy xyz file is {}!".format(
-                        xyzpath))
+                    # logging.info("The lowest energy xyz file is {}!".format(
+                    #     xyzpath))
 
         if options["calculate_fod"]:  # We will run an orca FOD job
             
@@ -668,7 +668,7 @@ class ThermoJob():
                 assert os.path.exists(log),"It appears the calculation failed for {}...cannot calculate fod".format(conformer.smiles)
                 atoms = read_log(log)
                 mult = ccread(log,loglevel=logging.ERROR).mult
-                conformer.ase_molecule = atoms
+                conformer._ase_molecule = atoms
                 conformer.update_coords_from("ase")
                 conformer.rmg_molecule.multiplicity = mult
                 self._calculate_fod(conformer=conformer,method_name=method_name)
@@ -760,7 +760,7 @@ class ThermoJob():
                 assert all([complete, converged]), "It appears the log file in incomplete or did not converge"
                 atoms = read_log(log)
                 mult = ccread(log,loglevel=logging.ERROR).mult
-                conformer.ase_molecule = atoms
+                conformer._ase_molecule = atoms
                 conformer.update_coords_from("ase")
                 conformer.rmg_molecule.multiplicity = mult
 
@@ -846,7 +846,7 @@ class ThermoJob():
                     gaussian_log_path=log_path)
                     arkane_calc.write_molecule_file()
                     if 'G' in sp_method:
-                        arkane_calc.write_arkane_input(frequency_scale_factor=0.9854,useIsodesmicReactions=True,n_reactions_max=50)
+                        arkane_calc.write_arkane_input(frequency_scale_factor=0.9854,useIsodesmicReactions=False,n_reactions_max=50)
                     else:
                         #arkane_calc.write_arkane_input(useIsodesmicReactions=True,n_reactions_max=50)
                         arkane_calc.write_arkane_input(useIsodesmicReactions=False,useBondCorrections=False,useAtomCorrections=False)
