@@ -846,10 +846,11 @@ class ThermoJob():
                     gaussian_log_path=log_path)
                     arkane_calc.write_molecule_file()
                     if 'G' in sp_method:
-                        arkane_calc.write_arkane_input(frequency_scale_factor=0.9854,useIsodesmicReactions=False,n_reactions_max=50)
+                        #arkane_calc.write_arkane_input(frequency_scale_factor=0.9854,useIsodesmicReactions=False,n_reactions_max=50)
+                        arkane_calc.write_arkane_input(frequency_scale_factor=0.9854,useAtomCorrections=True,useBondCorrections=True)
                     else:
                         #arkane_calc.write_arkane_input(useIsodesmicReactions=True,n_reactions_max=50)
-                        arkane_calc.write_arkane_input(useIsodesmicReactions=False,useBondCorrections=False,useAtomCorrections=False)
+                        arkane_calc.write_arkane_input(useIsodesmicReactions=False,useBondCorrections=True,useAtomCorrections=True)
                     yml_file = os.path.join(arkane_dir,'species','1.yml')
                     
                     if os.path.exists(yml_file):
