@@ -496,7 +496,7 @@ class ThermoJob():
         if len(spcs.smiles) == 1 or conformer.rmg_molecule.multiplicity != 2:
             return conformer
     
-        rad_index = spins[-1].index(max(spins[-1]))
+        rad_index = list(spins[-1]).index(max(spins[-1]))
         for smiles in spcs.smiles:
             conf = spcs.conformers[smiles][0]
             smiles_rad_index = [i for i,atom in enumerate(conf.rmg_molecule.atoms) if atom.radical_electrons == 1][0]
