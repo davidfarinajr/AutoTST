@@ -506,7 +506,7 @@ class ThermoJob():
         if conformer.smiles == smiles:
             return conformer
         
-        new_conf = spcs.conformers[smiles]
+        new_conf = spcs.conformers[smiles][0]
         new_conf._ase_molecule = conformer.ase_molecule
         logging.info('Based on the localized spin density, {} is a better representation of the \
             electronic structure than the original smiles {}'.format(smiles,conformer.smiles))
