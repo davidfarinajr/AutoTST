@@ -1,4 +1,4 @@
-from autotst.calculator.gaussian import read_log,write_input,Gaussian
+from autotst.calculator.gaussian import read_log,write_input,get_spin_partial_charges,Gaussian
 from autotst.calculator.orca import Orca
 from autotst.calculator.arkane_input import Arkane_Input
 from autotst.species import Species, Conformer
@@ -482,6 +482,37 @@ class ThermoJob():
             logging.info("It appears the FOD orca job never ran")
             return False
 
+    def get_representative_resonance_conformer(self,conformer,path):
+
+        charges,spins = get_spin_partial_charges(path)
+
+        for i,atom in enumerate(conformer.rmg_molecule.atoms):
+            if len(charges)>0:
+                atom.props['mulliken_charge'] = charges[-1][i]
+            if len(spins)>0:
+                atom.props['spin_density'] = spins[-1][i]
+
+        spcs = Species(smiles=[conformer.smiles])
+        if len(spcs.smiles) == 1 or conformer.rmg_molecule.multiplicity != 2:
+            return conformer
+    
+        rad_index = spins[-1].index(max(spins[-1]))
+        for smiles in spcs.smiles:
+            conf = spcs.conformers[smiles][0]
+            smiles_rad_index = [i for i,atom in enumerate(conf.rmg_molecule.atoms) if atom.radical_electrons == 1][0]
+            if rad_index == smiles_rad_index:
+                break
+        
+        if conformer.smiles == smiles:
+            return conformer
+        
+        new_conf = spcs.conformers[smiles]
+        new_conf._ase_molecule = conformer.ase_molecule
+        logging.info('Based on the localized spin density, {} is a better representation of the \
+            electronic structure than the original smiles {}'.format(smiles,conformer.smiles))
+        
+        return new_conf 
+
     def calculate_species(self, 
                           options = {
                             "optimize" : True,
@@ -842,6 +873,11 @@ class ThermoJob():
                     copyfile(log_path,
                     os.path.join(arkane_dir,label+'.log'))
                     model_chem = sp_method
+                    spcs = Species(smiles=[smiles])
+                    conformer = spcs.conformers[smiles][0]
+                    if mult == 2 and len(spcs.smiles) > 1: 
+                        resonance_conformer = self.get_representative_resonance_conformer(conformer,log_path)
+                        molecule = resonance_conformer.rmg_molecule
                     arkane_calc = Arkane_Input(molecule=molecule,modelChemistry=model_chem,directory=arkane_dir,
                     gaussian_log_path=log_path)
                     arkane_calc.write_molecule_file()
