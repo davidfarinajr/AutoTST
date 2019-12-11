@@ -27,6 +27,7 @@
 #
 ##########################################################################
 
+from rmgpy.molecule import Atom as RMGAtom
 import os
 import itertools
 import logging
@@ -37,14 +38,22 @@ import autotst
 from autotst.reaction import Reaction, TS
 from autotst.species import Species, Conformer
 from autotst.geometry import Torsion
+from autotst.utils.periodic_table import atomic_number_symbol_dict
 
 from ase import Atom, Atoms
 from ase.io.gaussian import read_gaussian, read_gaussian_out
 from ase.calculators.gaussian import Gaussian as ASEGaussian
 
-from shutil import move
+import rmgpy
+from rmgpy.molecule import Molecule as RMGMolecule
+from rmgpy.reaction import Reaction as RMGReaction
+from rmgpy.molecule import Atom as RMGAtom
+from rmgpy.molecule import Bond
 
-def read_log(file_path=None):
+from shutil import move
+import yaml
+
+def read_log(file_path):
         """
         A helper method that allows one to easily parse log files
         """
@@ -91,9 +100,6 @@ def write_input(conformer, ase_calculator):
             ase_calculator.scratch,
             ase_calculator.label + ".ase"
         ))
-import rmgpy
-from rmgpy.molecule import Molecule as RMGMolecule
-from rmgpy.reaction import Reaction as RMGReaction
 
 
 class Gaussian():
@@ -106,7 +112,7 @@ class Gaussian():
                      "dispersion": None,
                      "mem": "5GB",
                      "sp": 'G4',
-                     "convergence": 'default',
+                     "convergence": "",
                      "nprocshared": 20,
                      "time": "24:00:00",
                      "partition": 'general,west'
@@ -124,7 +130,7 @@ class Gaussian():
 
         self.conformer = conformer
 
-        # setting the settings accordingly
+        #setting the settings accordingly
         for setting, value in list(default_settings.items()):
             if setting in list(settings.keys()):
                 assert isinstance(settings[setting], type(
@@ -139,10 +145,8 @@ class Gaussian():
         self.settings = settings
 
         self.settings["convergence"] = settings["convergence"].lower()
-        convergence_options = ["default", "verytight", "tight", "loose"]
+        convergence_options = ["", "verytight", "tight", "loose"]
         assert self.settings["convergence"] in convergence_options,"{} is not among the supported convergence options {}".format(settings["convergence"],convergence_options)
-        if self.settings["convergence"] == "default":
-            self.settings["convergence"] = ''
     
         self.directory = directory
 
@@ -176,6 +180,108 @@ class Gaussian():
             return '<Gaussian Calculator {}>'.format(self.conformer.smiles)
         else:
             return '<Gaussian Calculator>'
+
+    def read_nbo_log(self,path):
+        """
+        Method to determine the representative Lewis structure from a Gaussian NBO calculation.
+        Writes a yml file with results from nbo calculation.
+        
+        Args:
+            - path (str): path to gaussian nbo log file
+        
+        Returns:
+            - RMG Molecule (rmgpy.molecule.molecule.Molecule)
+        """
+        
+        data = ccread(path)
+
+        atoms = []
+        bonds = {}
+
+        for i, atom_number in enumerate(data.atomnos):
+            atoms.append(RMGAtom(id=i+1, element=atomic_number_symbol_dict[atom_number],
+                            coords=data.atomcoords[-1][i]))
+
+        lines = open(path, 'r').readlines()
+        _ = False
+
+        for line in lines:
+            if 'Natural Bond Orbitals (Summary):' in line:
+                _ = True
+            if _ is True:
+                if 'BD' in line:
+                    atom1 = atoms[int(line.split('-')[0].split()[-1])-1]
+                    atom2 = atoms[int(line.split('-')[1].split()[1])-1]
+                    occupancy = float(line.split('-')[1].split()[2])
+                    if (atom1.id, atom2.id) not in list(bonds.keys()):
+                        bond = Bond(atom1, atom2)
+                        bond.order = occupancy/2
+                        if '*' in line:
+                            bond.order = -bond.order
+                        atom1.bonds[atom2] = bond
+                        atom2.bonds[atom1] = bond
+                        bonds[(atom1.id, atom2.id)] = bond
+                    else:
+                        bond = bonds[(atom1.id, atom2.id)]
+                        if '*' in line:
+                            bond.order -= occupancy/2
+                        else:
+                            bond.order += occupancy/2
+                if 'LP'in line:
+                    atom = atoms[int(line.split(')')[1].split()[1])-1]
+                    orbital = int(line.split(')')[0].split()[-1])
+                    occupancy = float(line.split(')')[1].split()[2])
+                    orbital = "LP_{}".format(orbital)
+                    if orbital not in list(atom.props.keys()):
+                        atom.props[orbital] = occupancy
+                    else:
+                        if '*' in line:
+                            atom.props[orbital] -= occupancy
+                        else:
+                            atom.props[orbital] += occupancy
+            if 'Charge unit' in line:
+                _ = False
+
+        for atom in atoms:
+            if len(atom.props.keys()) > 0:
+                for orbital, occupancy in atom.props.items():
+                    if atom.lone_pairs == -100:
+                        atom.lone_pairs = 0
+                    if round(occupancy) == 2:
+                        atom.increment_lone_pairs()
+                    elif 0 < occupancy <= 1.5:
+                        atom.increment_radical()
+                atom.update_charge()
+
+        mol = RMGMolecule(atoms=atoms)
+        mol.update_lone_pairs()
+        mol.update_multiplicity()
+        mol.update_connectivity_values()
+
+        assert mol.multiplicity == data.mult,\
+            "Multiplicities do not match ({} != {})".format(
+                mol.multiplicity, data.mult)
+
+        mol_copy = mol.copy(deep=True)
+        for bond in mol_copy.get_all_edges():
+            bond.order = round(bond.order)
+
+        info = {
+            'info': data.metadata,
+            'smiles': mol_copy.to_smiles(),
+            'adj_list': mol.to_adjacency_list(),
+            'mult': data.mult,
+            'inchi': mol_copy.to_inchi(),
+            'inchi_key': mol_copy.to_inchi_key(),
+            'atom_numbers': data.atomnos.tolist(),
+            'coords': data.atomcoords.tolist(),
+            'natural_charges': data.atomcharges['natural'].tolist()
+        }
+
+        with open('{}_nbo.yml'.format(mol_copy.to_smiles()), 'w') as f:
+            yaml.safe_dump(info, f)
+
+        return mol_copy
 
     def get_rotor_calc(self,
                        torsion_index=0,
@@ -270,11 +376,12 @@ class Gaussian():
 
         method = self.settings["method"].upper()
         basis = self.settings["basis"].upper()
-        dispersion = self.settings["dispersion"].upper()
-        convergence = self.settings["convergence"].upper()
+        if self.settings["dispersion"]:
+            dispersion = 'EmpiricalDispersion={}'.format(self.settings["dispersion"].upper())
+        else: 
+            dispersion = ''
 
-        if dispersion:
-            dispersion = 'EmpiricalDispersion={}'.format(dispersion)
+        convergence = self.settings["convergence"].upper()
 
         self.settings["mem"] = '10GB'
         num_atoms = self.conformer.rmg_molecule.get_num_atoms()
@@ -322,7 +429,6 @@ class Gaussian():
         except OSError:
             pass
 
-       
         ase_gaussian = ASEGaussian(
             mem=self.settings["mem"],
             nprocshared=self.settings["nprocshared"],
@@ -331,6 +437,62 @@ class Gaussian():
             method=method,
             basis=basis,
             extra="opt=(calcfc,maxcycles=900,{}) {} freq IOP(7/33=1,2/16=3) scf=(maxcycle=900)".format(convergence,dispersion),
+            multiplicity=self.conformer.rmg_molecule.multiplicity)
+        ase_gaussian.atoms = self.conformer.ase_molecule
+        ase_gaussian.directory = new_scratch
+        ase_gaussian.label = label
+        ase_gaussian.parameters["partition"] = self.settings["partition"]
+        ase_gaussian.parameters["time"] = self.settings["time"]
+        del ase_gaussian.parameters['force']
+        return ase_gaussian
+
+    def get_nbo_calc(self):
+        """
+        A method that creates a calculator for a `Conformer` that will perform a Natural Bond Orbital (NBO) population calculation
+
+        Returns:
+        - calc (ASEGaussian): an ASEGaussian calculator with all of the proper setting specified
+        """
+
+        self.settings["mem"] = '10GB'
+        method = self.settings["method"].upper()
+        basis = self.settings["basis"].upper()
+
+        num_atoms = self.conformer.rmg_molecule.get_num_atoms()
+
+        if num_atoms <= 4:
+            self.settings["nprocshared"] = 1
+            self.settings["time"] = '6:00:00'
+        elif num_atoms <= 10:
+            self.settings["nprocshared"] = 2
+            self.settings["time"] = '6:00:00'
+        else:
+            self.settings["nprocshared"] = 4
+            self.settings["time"] = '6:00:00'
+
+        label = "{}_nbo".format(self.conformer.smiles)
+
+        new_scratch = os.path.join(
+            self.directory,
+            "species",
+            self.opt_method,
+            self.conformer.smiles,
+            "nbo"
+        )
+
+        try:
+            os.makedirs(new_scratch)
+        except OSError:
+            pass
+
+        ase_gaussian = ASEGaussian(
+            mem=self.settings["mem"],
+            nprocshared=self.settings["nprocshared"],
+            label=label,
+            scratch=new_scratch,
+            method=method,
+            basis=basis,
+            extra="pop=nbo",
             multiplicity=self.conformer.rmg_molecule.multiplicity)
         ase_gaussian.atoms = self.conformer.ase_molecule
         ase_gaussian.directory = new_scratch
