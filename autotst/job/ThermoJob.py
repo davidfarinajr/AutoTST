@@ -487,15 +487,17 @@ class ThermoJob():
                             "optimize" : True,
                             "run_sp" : True,
                             "recalculate" : False,
-                            "calculate_fod" : True,
+                            "calculate_fod" : False,
                             "delta" : float(120),
                             "vary_multiplicity" : False,
-                            "rmsd_cutoff" : "default",
-                            "energy_cutoff" : "default",
-                            "run_arkane_dft" : True,
+                            "rmsd_cutoff" : 0.1,
+                            "energy_cutoff" : 20,
+                            "run_arkane_dft" : False,
                             "run_arkane_sp": True,
-                            "dir_path": None
-                          }
+                            "use_atom_corrections": True,
+                            "use_bond_corrections": True,
+                            "use_isodesmic_reactions": False,
+                            "dir_path": None}
                           ):
         """
         Calculates the energy and harmonic frequencies of the lowest energy conformer of a species:
@@ -507,6 +509,7 @@ class ThermoJob():
         method = self.calculator.settings['method'].upper()
         basis_set = self.calculator.settings['basis'].upper()
         method_name = self.method_name
+        smiles = self.species.smiles[0]
 
         if options["dir_path"]:
             dest2 = os.path.join(options["dir_path"],self.method_name)
@@ -515,281 +518,66 @@ class ThermoJob():
         else:
             dest2 = None
         
+        label = "{}_{}_optfreq".format(smiles, method_name)
+        log_path = os.path.join(self.calculator.directory,
+                                "species", method_name, smiles, label+".log")
+        ref_conformer = self.species.conformers[smiles][0]
+
         if options["optimize"]:
-            for smiles in self.species.smiles:
-                label =  "{}_{}_optfreq".format(smiles,method_name)
-                log_path = os.path.join(self.calculator.directory,"species",method_name,smiles,label+".log")
-                sp_dir = os.path.join(self.calculator.directory,"species",method_name,smiles,'sp')
-                if not os.path.exists(log_path):
-                    got_one = False
-                if os.path.exists(log_path) and not options["recalculate"]:
-                    logging.info('It appears we already calculated this species')
-                    logging.info('Checking to see if the log is complete and converge...')
-                    complete, converged = self.calculator.verify_output_file(log_path)
-                    
-                    if (complete and converged):
-                        logging.info('creating a sample conformer for isomorphism test...')
-                        conf = Conformer(smiles=smiles)
-                        if check_isomorphic(conformer=conf, log_path=log_path):
-                            got_one = True
-                            logging.info('The existing log has been verified')
-                        else:
-                            got_one = False
-                            logging.info('removing existing log and restarting calculation...')
-                            os.remove(log_path)
-                            if os.path.exists(sp_dir):
-                                rmtree(sp_dir)
-                        
+            sp_dir = os.path.join(self.calculator.directory,"species",method_name,smiles,'sp')
+            if not os.path.exists(log_path):
+                got_one = False
+            if os.path.exists(log_path) and not options["recalculate"]:
+                logging.info('It appears we already calculated this species')
+                logging.info('Checking to see if the log is complete and converge...')
+                complete, converged = self.calculator.verify_output_file(log_path)
+                
+                if (complete and converged):
+                    logging.info('creating a sample conformer for isomorphism test...')
+                    conf = Conformer(smiles=smiles)
+                    if check_isomorphic(conformer=conf, log_path=log_path):
+                        got_one = True
+                        logging.info('The existing log has been verified')
                     else:
                         got_one = False
-                        logging.info('the existing log did not complete or converge')
                         logging.info('removing existing log and restarting calculation...')
                         os.remove(log_path)
                         if os.path.exists(sp_dir):
                             rmtree(sp_dir)
-
-                if (options["recalculate"] is False) and (got_one is True):
-                    continue
-                else:
-                    logging.info("Calculating geometries for {}".format(species))
-
-                    if self.conformer_calculator:
-                        species.generate_conformers(
-                            ase_calculator=self.conformer_calculator,
-                            delta = options['delta'],
-                            rmsd_cutoff = options['rmsd_cutoff'],
-                            energy_cutoff = options['energy_cutoff'],
-                            multiplicity = options["vary_multiplicity"])
-
-                    currently_running = []
-                    processes = {}
                     
-                    for conformer in species.conformers[smiles]:
-                        process = Process(target=self.calculate_conformer, args=
-                            (conformer,))
-                        processes[process.name] = process
-
-                    for name, process in list(processes.items()):
-                        process.start()
-                        currently_running.append(name)
-
-                    while len(currently_running) > 0:
-                        for name, process in list(processes.items()):
-                            if not (name in currently_running):
-                                continue
-                            if not process.is_alive():
-                                currently_running.remove(name)
-                        time.sleep(15)
-
-                    results = []
-
-                    for conformer in list(species.conformers[smiles]):
-                        scratch_dir = os.path.join(
-                            self.directory,
-                            "species",
-                            method_name,
-                            conformer.smiles,
-                            "conformers"
-                        )
-                        f = "{}_{}_{}_optfreq.log".format(conformer.smiles, conformer.index, method_name)
-                        path = os.path.join(scratch_dir, f)
-                        if not os.path.exists(path):
-                            logging.info(
-                                "It seems that {} was never run...".format(f))
-                            continue
-                        try:
-                            parser = ccread(path, loglevel=logging.ERROR)
-                            atoms = read_log(path)
-                            conformer._ase_molecule = atoms
-                            conformer.update_coords_from("ase")
-                            if not check_isomorphic(conformer=conformer,log_path=path):
-                                logging.info("{}_{} is not isomorphic with starting species".format(conformer.smiles, conformer.index))
-                                continue
-                            if parser is None:
-                                logging.info(
-                                    "Something went wrong when reading in results for {} using cclib...".format(f))
-                                continue
-                            energy = parser.scfenergies[-1]
-                        except:
-                            logging.info(
-                                "The parser does not have an scf energies attribute, we are not considering {}".format(f))
-                            energy = 1e5
-
-                        results.append([energy, conformer, f])
-
-                    results = pd.DataFrame(
-                        results, columns=["energy", "conformer", "file"]).sort_values("energy").reset_index()
-
-                    if results.shape[0] == 0:
-                        logging.info(
-                            "No conformer for {} was successfully calculated... :(".format(species))
-                        return False
-                    
-                    conformer = results['conformer'][0]
-                    lowest_energy_file = results['file'][0]
-
-                    # for index in range(results.shape[0]):
-                    #     conformer = results.conformer[index]
-                    #     lowest_energy_file = results.file[index]
-                    #     break
-
-                    logging.info(
-                        "The lowest energy conformer is {}".format(lowest_energy_file))
-
-                    lowest_energy_file_path = os.path.join(self.calculator.directory, "species",method_name, conformer.smiles,"conformers",lowest_energy_file)
-                    label =  "{}_{}_optfreq".format(conformer.smiles,method_name)
-                    dest = os.path.join(self.calculator.directory,"species",method_name,conformer.smiles,label+".log")
-
-                    try:
-                        copyfile(lowest_energy_file_path,dest)
-                    except IOError:
-                        os.makedirs(os.path.dirname(dest))
-                        copyfile(lowest_energy_file_path,dest)
-
-                    logging.info("The lowest energy file is {}! :)".format(
-                        lowest_energy_file))
-
-                    parser = ccread(dest, loglevel=logging.ERROR)
-                    # xyzpath = os.path.join(self.calculator.directory,"species",method_name,conformer.smiles,label+".xyz")
-                    # parser.writexyz(xyzpath)
-
-                    # logging.info("The lowest energy xyz file is {}!".format(
-                    #     xyzpath))
-
-        if options["calculate_fod"]:  # We will run an orca FOD job
-            
-            method_name = self.method_name
-            # Update the lowest energy conformer 
-            # with the lowest energy logfile
-            for smiles in self.species.smiles:
-                label =  "{}_{}".format(smiles,method_name)
-                conformer = Conformer(smiles=smiles)
-                log = os.path.join(self.calculator.directory,"species",method_name,conformer.smiles,label+"_optfreq.log")
-                assert os.path.exists(log),"It appears the calculation failed for {}...cannot calculate fod".format(conformer.smiles)
-                atoms = read_log(log)
-                mult = ccread(log,loglevel=logging.ERROR).mult
-                conformer._ase_molecule = atoms
-                conformer.update_coords_from("ase")
-                conformer.rmg_molecule.multiplicity = mult
-                self._calculate_fod(conformer=conformer,method_name=method_name)
-                if dest2:
-                    fod_path = os.path.join(
-                        self.directory,
-                        "species",
-                        method_name,
-                        smiles,
-                        smiles + '_fod.log'
-                        )
-                    copyfile(fod_path,os.path.join(dest2,smiles + '_fod.log'))
-
-
-        if options['run_arkane_dft']:
-            ##### run Arkane
-            for i,smiles in enumerate(self.species.smiles):
-                logging.info("running arkane for {} with {} method".format(smiles,method_name))
-                arkane_dir = os.path.join(
-                    self.directory,
-                    "species",
-                    method_name,
-                    smiles,
-                    'arkane'
-                )
-                if not os.path.exists(arkane_dir):
-                    os.makedirs(arkane_dir)
-
-                label =  "{}_{}_optfreq".format(smiles,method_name)
-                log_path = os.path.join(self.directory,"species",method_name,smiles,label+".log")
-                if not os.path.exists(log_path):
-                    continue
-                mult = ccread(log_path,loglevel=logging.ERROR).mult
-                copyfile(log_path,os.path.join(arkane_dir,label + ".log"))
-                molecule = self.species.rmg_species[i]
-                if molecule.to_smiles() != smiles:
-                    for mol in self.species.rmg_species:
-                        if mol.to_smiles() == smiles:
-                            molecule = mol
-                            break
-                molecule.multiplicity = mult
-                arkane_calc = Arkane_Input(molecule=molecule,modelChemistry=method_name,directory=arkane_dir,gaussian_log_path=log_path)
-                arkane_calc.write_molecule_file()
-                arkane_calc.write_arkane_input(useIsodesmicReactions=True,n_reactions_max=50)
-                yml_file = os.path.join(arkane_dir,'species','1.yml')
-                if os.path.exists(yml_file):
-                    logging.info("It appears the arkane job has already been run")
                 else:
-                    subprocess.Popen(
-                        """python $RMGpy/Arkane.py arkane_input.py""", 
-                        shell=True, cwd=arkane_calc.directory)
-                    while not os.path.exists(yml_file):
-                        time.sleep(10)
-                time.sleep(5)
-                os.remove(os.path.join(arkane_dir,label + ".log"))
-                dest = os.path.join(
-                    self.directory,
-                    "species",
-                    method_name,
-                    smiles,
-                    smiles + '.yml'
-                )
+                    got_one = False
+                    logging.info('the existing log did not complete or converge')
+                    logging.info('removing existing log and restarting calculation...')
+                    os.remove(log_path)
+                    if os.path.exists(sp_dir):
+                        rmtree(sp_dir)
 
-                if os.path.exists(yml_file):
-                    arkane_out = os.path.join(arkane_dir,'output.py')
-                    arkane_supporting = os.path.join(arkane_dir,'supporting_information.csv')
-                    copyfile(yml_file,dest)
-                    if dest2:
-                        copyfile(arkane_out,os.path.join(dest2,smiles + '_arkaneOutput.py'))
-                        try:
-                            copyfile(arkane_supporting,os.path.join(dest2,smiles + '_arkaneSupporting.csv'))
-                            copyfile(yml_file,os.path.join(dest2,smiles + '.yml'))
-                        except:
-                            pass
-                        #copyfile(log_path,os.path.join(dest2,label + '.log'))
-                    logging.info('Arkane job completed successfully!')
+            if (options["recalculate"] is False) and (got_one is True):
+                logging.info("It appears we have already optimized {}".format(species))
+            else:
+                logging.info("Calculating geometries for {}".format(species))
 
-                else:
-                    logging.info('It appears the arkane job failed or was never run for {}'.format(smiles))
-                    continue
-
-        if options["run_sp"]:
-            for smiles in self.species.smiles:
-                label =  "{}_{}".format(smiles,method_name)
-                conformer = Conformer(smiles=smiles)
-                log = os.path.join(self.directory,"species",method_name,conformer.smiles,label+"_optfreq.log")
-                assert os.path.exists(log), "It appears the calculation failed for {}...cannot perform single point calculations".format(conformer.smiles)
-                complete, converged = self.calculator.verify_output_file(log)
-                assert all([complete, converged]), "It appears the log file in incomplete or did not converge"
-                atoms = read_log(log)
-                mult = ccread(log,loglevel=logging.ERROR).mult
-                conformer._ase_molecule = atoms
-                conformer.update_coords_from("ase")
-                conformer.rmg_molecule.multiplicity = mult
-
-                single_point_method = self.calculator.settings["sp"]
-                if isinstance(single_point_method,str):
-                    single_point_methods = [single_point_method]
-                else: 
-                    single_point_methods = single_point_method
-                
-                sp_dir = os.path.join(self.directory,"species",method_name,conformer.smiles,"sp")
-                if not os.path.exists(sp_dir):
-                    os.makedirs(sp_dir)
+                if self.conformer_calculator:
+                    species.generate_conformers(
+                        ase_calculator=self.conformer_calculator,
+                        delta = options['delta'],
+                        rmsd_cutoff = options['rmsd_cutoff'],
+                        energy_cutoff = options['energy_cutoff'],
+                        multiplicity = options["vary_multiplicity"])
 
                 currently_running = []
                 processes = {}
                 
-                for sp_method in single_point_methods:
-                    process = Process(target=self.calculate_sp, args=(conformer,
-                        sp_method))
+                for conformer in species.conformers[smiles]:
+                    process = Process(target=self.calculate_conformer, args=
+                        (conformer,))
                     processes[process.name] = process
 
-                # This loop will block until everything in processes 
-                # has been started, and added to currently_running
                 for name, process in list(processes.items()):
                     process.start()
                     currently_running.append(name)
 
-                # This loop will block until everything in currently_running
-                # has finished.
                 while len(currently_running) > 0:
                     for name, process in list(processes.items()):
                         if not (name in currently_running):
@@ -797,6 +585,277 @@ class ThermoJob():
                         if not process.is_alive():
                             currently_running.remove(name)
                     time.sleep(15)
+
+                results = []
+
+                for conformer in list(species.conformers[smiles]):
+                    scratch_dir = os.path.join(
+                        self.directory,
+                        "species",
+                        method_name,
+                        conformer.smiles,
+                        "conformers"
+                    )
+                    f = "{}_{}_{}_optfreq.log".format(conformer.smiles, conformer.index, method_name)
+                    path = os.path.join(scratch_dir, f)
+                    if not os.path.exists(path):
+                        logging.info(
+                            "It seems that {} was never run...".format(f))
+                        continue
+                    try:
+                        parser = ccread(path, loglevel=logging.ERROR)
+                        atoms = read_log(path)
+                        conformer._ase_molecule = atoms
+                        conformer.update_coords_from("ase")
+                        if not check_isomorphic(conformer=conformer,log_path=path):
+                            logging.info("{}_{} is not isomorphic with starting species".format(conformer.smiles, conformer.index))
+                            continue
+                        if parser is None:
+                            logging.info(
+                                "Something went wrong when reading in results for {} using cclib...".format(f))
+                            continue
+                        energy = parser.scfenergies[-1]
+                    except:
+                        logging.info(
+                            "The parser does not have an scf energies attribute, we are not considering {}".format(f))
+                        energy = 1e5
+
+                    results.append([energy, conformer, f])
+
+                results = pd.DataFrame(
+                    results, columns=["energy", "conformer", "file"]).sort_values("energy").reset_index()
+
+                if results.shape[0] == 0:
+                    logging.info(
+                        "No conformer for {} was successfully calculated... :(".format(species))
+                    return False
+                
+                conformer = results['conformer'][0]
+                lowest_energy_file = results['file'][0]
+
+                # for index in range(results.shape[0]):
+                #     conformer = results.conformer[index]
+                #     lowest_energy_file = results.file[index]
+                #     break
+
+                logging.info(
+                    "The lowest energy conformer is {}".format(lowest_energy_file))
+
+                lowest_energy_file_path = os.path.join(self.calculator.directory, "species",method_name, conformer.smiles,"conformers",lowest_energy_file)
+                label =  "{}_{}_optfreq".format(conformer.smiles,method_name)
+                dest = os.path.join(self.calculator.directory,"species",method_name,conformer.smiles,label+".log")
+
+                try:
+                    copyfile(lowest_energy_file_path,dest)
+                except IOError:
+                    os.makedirs(os.path.dirname(dest))
+                    copyfile(lowest_energy_file_path,dest)
+
+                logging.info("The lowest energy file is {}! :)".format(
+                    lowest_energy_file))
+
+                # parser = ccread(dest, loglevel=logging.ERROR)
+
+                
+                # xyzpath = os.path.join(self.calculator.directory,"species",method_name,conformer.smiles,label+".xyz")
+                # parser.writexyz(xyzpath)
+
+                # logging.info("The lowest energy xyz file is {}!".format(
+                #     xyzpath))
+
+        if len(self.species.smiles) > 1 and os.path.exists(log_path):
+
+            logging.info("There are multiple resonance structures for {}".format(self.species))
+            logging.info(
+                "Performing NBO calculation to determine best Lewis structure for {}".format(self.species))
+            atoms = read_log(log_path)
+            ref_conformer._ase_molecule = atoms
+            ref_conformer.update_coords_from("ase")
+            self.calculator.conformer = ref_conformer
+            calc = self.calculator.get_nbo_calc()
+            label = calc.label
+            nbo_path = os.path.join(calc.scratch, calc.label + ".log")
+            logging.info(
+                "Submitting conformer calculation for {}".format(calc.label))
+            label = self._submit_conformer(ref_conformer, calc)
+            time.sleep(10)
+            while not check_complete(label=label, user=self.discovery_username):
+                time.sleep(10)
+
+            complete, converged = self.calculator.verify_output_file(log_path)
+
+            if complete:
+
+                try:
+                    mol = calc.read_nbo_log(nbo_path)
+                    if mol.smiles != smiles:
+                        logging.info("Based on NBO, the best smiles for {} is {}, not {}".format(
+                            self.species, mol.smiles, smiles))
+                    else:
+                        logging.info("Based on NBO, the best smiles for {} is {}".format(
+                            self.species, mol.smiles))
+                    best_smiles = mol.smiles
+                    ref_conformer.rmg_molecule = mol
+                    ref_conformer.smiles = mol.smiles
+                except:
+                    logging.info("An error occured when reading NBO log")
+                    best_smiles = smiles
+
+                # parser = ccread(dest, loglevel=logging.ERROR)
+
+                
+                # xyzpath = os.path.join(self.calculator.directory,"species",method_name,conformer.smiles,label+".xyz")
+                # parser.writexyz(xyzpath)
+
+                # logging.info("The lowest energy xyz file is {}!".format(
+                #     xyzpath))
+            else:
+                logging.info("The NBO calculation failed")
+                best_smiles = smiles
+        else:
+            best_smiles = smiles
+                
+
+        if options["calculate_fod"]:  # We will run an orca FOD job
+            
+            method_name = self.method_name
+            # Update the lowest energy conformer 
+            # with the lowest energy logfile
+            label =  "{}_{}".format(smiles,method_name)
+            conformer = Conformer(smiles=smiles)
+            log = os.path.join(self.calculator.directory,"species",method_name,conformer.smiles,label+"_optfreq.log")
+            assert os.path.exists(log),"It appears the calculation failed for {}...cannot calculate fod".format(conformer.smiles)
+            atoms = read_log(log)
+            mult = ccread(log,loglevel=logging.ERROR).mult
+            conformer._ase_molecule = atoms
+            conformer.update_coords_from("ase")
+            conformer.rmg_molecule.multiplicity = mult
+            self._calculate_fod(conformer=conformer,method_name=method_name)
+            if dest2:
+                fod_path = os.path.join(
+                    self.directory,
+                    "species",
+                    method_name,
+                    smiles,
+                    smiles + '_fod.log'
+                    )
+                copyfile(fod_path,os.path.join(dest2,smiles + '_fod.log'))
+
+
+        if options['run_arkane_dft']:
+            ##### run Arkane
+            logging.info("running arkane for {} with {} method".format(smiles,method_name))
+            arkane_dir = os.path.join(
+                self.directory,
+                "species",
+                method_name,
+                smiles,
+                'arkane'
+            )
+            if not os.path.exists(arkane_dir):
+                os.makedirs(arkane_dir)
+
+            label =  "{}_{}_optfreq".format(smiles,method_name)
+            log_path = os.path.join(self.directory,"species",method_name,smiles,label+".log")
+            assert os.path.exists(log_path)
+            mult = ccread(log_path,loglevel=logging.ERROR).mult
+            copyfile(log_path,os.path.join(arkane_dir,label + ".log"))
+            molecule = RMGMolecule(smiles=best_smiles)
+            # molecule = self.species.rmg_species[i]
+            # if molecule.to_smiles() != smiles:
+            #     for mol in self.species.rmg_species:
+            #         if mol.to_smiles() == smiles:
+            #             molecule = mol
+            #             break
+            molecule.multiplicity = mult
+            arkane_calc = Arkane_Input(molecule=molecule,modelChemistry=method_name,directory=arkane_dir,gaussian_log_path=log_path)
+            arkane_calc.write_molecule_file()
+            arkane_calc.write_arkane_input(
+                useAtomCorrections=options["use_atom_corrections"],useBondCorrections=options["use_bond_corrections"],
+                useIsodesmicReactions=options["use_isodesmic_reactions"])
+            yml_file = os.path.join(arkane_dir,'species','1.yml')
+            if os.path.exists(yml_file):
+                logging.info("It appears the arkane job has already been run")
+            else:
+                subprocess.Popen(
+                    """python $RMGpy/Arkane.py arkane_input.py""", 
+                    shell=True, cwd=arkane_calc.directory)
+                while not os.path.exists(yml_file):
+                    time.sleep(10)
+            time.sleep(5)
+            os.remove(os.path.join(arkane_dir,label + ".log"))
+            dest = os.path.join(
+                self.directory,
+                "species",
+                method_name,
+                smiles,
+                best_smiles + '.yml'
+            )
+
+            if os.path.exists(yml_file):
+                arkane_out = os.path.join(arkane_dir,'output.py')
+                arkane_supporting = os.path.join(arkane_dir,'supporting_information.csv')
+                copyfile(yml_file,dest)
+                if dest2:
+                    copyfile(arkane_out,os.path.join(dest2,best_smiles + '_arkaneOutput.py'))
+                    try:
+                        copyfile(arkane_supporting,os.path.join(dest2,best_smiles + '_arkaneSupporting.csv'))
+                        copyfile(yml_file,os.path.join(dest2,best_smiles + '.yml'))
+                    except:
+                        pass
+                    #copyfile(log_path,os.path.join(dest2,label + '.log'))
+                logging.info('Arkane job completed successfully!')
+
+            else:
+                logging.info('It appears the arkane job failed or was never run for {}'.format(smiles))
+
+        if options["run_sp"]:
+
+            label =  "{}_{}".format(smiles,method_name)
+            conformer = Conformer(smiles=smiles)
+            log = os.path.join(self.directory,"species",method_name,conformer.smiles,label+"_optfreq.log")
+            assert os.path.exists(log), "It appears the calculation failed for {}...cannot perform single point calculations".format(conformer.smiles)
+            complete, converged = self.calculator.verify_output_file(log)
+            assert all([complete, converged]), "It appears the log file in incomplete or did not converge"
+            atoms = read_log(log)
+            mult = ccread(log,loglevel=logging.ERROR).mult
+            conformer._ase_molecule = atoms
+            conformer.update_coords_from("ase")
+            conformer.rmg_molecule.multiplicity = mult
+
+            single_point_method = self.calculator.settings["sp"]
+            if isinstance(single_point_method,str):
+                single_point_methods = [single_point_method]
+            else: 
+                single_point_methods = single_point_method
+            
+            sp_dir = os.path.join(self.directory,"species",method_name,conformer.smiles,"sp")
+            if not os.path.exists(sp_dir):
+                os.makedirs(sp_dir)
+
+            currently_running = []
+            processes = {}
+            
+            for sp_method in single_point_methods:
+                process = Process(target=self.calculate_sp, args=(conformer,
+                    sp_method))
+                processes[process.name] = process
+
+            # This loop will block until everything in processes 
+            # has been started, and added to currently_running
+            for name, process in list(processes.items()):
+                process.start()
+                currently_running.append(name)
+
+            # This loop will block until everything in currently_running
+            # has finished.
+            while len(currently_running) > 0:
+                for name, process in list(processes.items()):
+                    if not (name in currently_running):
+                        continue
+                    if not process.is_alive():
+                        currently_running.remove(name)
+                time.sleep(15)
 
         if options['run_arkane_sp']:
 
@@ -806,85 +865,88 @@ class ThermoJob():
             else: 
                 single_point_methods = single_point_method
 
-            for smiles in self.species.smiles:
+            arkane_dir = os.path.join(
+            self.directory,
+            "species",
+            method_name,
+            smiles,
+            "sp",
+            'arkane'
+            )
 
-                arkane_dir = os.path.join(
-                self.directory,
-                "species",
-                method_name,
-                smiles,
-                "sp",
-                'arkane'
-                )
+            if not os.path.exists(arkane_dir):
+                os.makedirs(arkane_dir)
 
-                if not os.path.exists(arkane_dir):
-                    os.makedirs(arkane_dir)
+            for sp_method in single_point_methods:
+                
+                label = smiles + '_' + sp_method
+                sp_dir = os.path.join(self.directory,"species",method_name,smiles,"sp")
+                log_path = os.path.join(sp_dir,label + '.log')
+                complete, converged = self.calculator.verify_output_file(log_path)
+                if not all([complete,converged]):
+                    logging.info("It seems the log file {} is incomplete or didnt converge".format(log_path))
+                    continue
+                dft_label =  "{}_{}_optfreq".format(smiles,method_name)
+                dft_log = os.path.join(self.directory,"species",method_name,smiles,dft_label+".log")
+                mult = ccread(dft_log,loglevel=logging.ERROR).mult
+                molecule = RMGMolecule(smiles=best_smiles)
+                # molecule = self.species.rmg_species[0]
+                # if molecule.to_smiles() != smiles:
+                #     for mol in self.species.rmg_species:
+                #         if mol.to_smiles() == smiles:
+                #             molecule = mol
+                #             break
+                molecule.multiplicity = mult
+                copyfile(log_path,
+                os.path.join(arkane_dir,label+'.log'))
+                model_chem = sp_method
+                arkane_calc = Arkane_Input(molecule=molecule,modelChemistry=model_chem,directory=arkane_dir,
+                gaussian_log_path=log_path)
+                arkane_calc.write_molecule_file()
+                if 'G' in sp_method:
+                    #arkane_calc.write_arkane_input(frequency_scale_factor=0.9854,useIsodesmicReactions=False,n_reactions_max=50)
+                    arkane_calc.write_arkane_input(frequency_scale_factor=0.9854,useAtomCorrections=options["use_atom_corrections"], 
+                    useBondCorrections=options["use_bond_corrections"],useIsodesmicReactions=options["use_isodesmic_reactions"])
+                else:
+                    #arkane_calc.write_arkane_input(useIsodesmicReactions=True,n_reactions_max=50)
+                    arkane_calc.write_arkane_input(
+                        useAtomCorrections=options["use_atom_corrections"], useBondCorrections=options["use_bond_corrections"],
+                        useIsodesmicReactions=options["use_isodesmic_reactions"])
+                
+                yml_file = os.path.join(arkane_dir,'species','1.yml')
+                
+                if os.path.exists(yml_file):
+                    logging.info("It appears the arkane job has already been run")
+                else:
+                    logging.info("starting arkane calc for {}".format(label))
+                    subprocess.Popen(
+                        """python $RMGpy/Arkane.py arkane_input.py""", 
+                        shell=True, cwd=arkane_calc.directory)
+                    while not os.path.exists(yml_file):
+                        time.sleep(10)
+                time.sleep(5)
+                os.remove(os.path.join(arkane_dir,label + ".log"))
+                arkane_out = os.path.join(arkane_dir,'output.py')
+                arkane_supporting = os.path.join(arkane_dir,'supporting_information.csv')
 
-                for sp_method in single_point_methods:
-                    
-                    label = smiles + '_' + sp_method
-                    sp_dir = os.path.join(self.directory,"species",method_name,smiles,"sp")
-                    log_path = os.path.join(sp_dir,label + '.log')
-                    complete, converged = self.calculator.verify_output_file(log_path)
-                    if not all([complete,converged]):
-                        logging.info("It seems the log file {} is incomplete or didnt converge".format(log_path))
-                        continue
-                    dft_label =  "{}_{}_optfreq".format(smiles,method_name)
-                    dft_log = os.path.join(self.directory,"species",method_name,smiles,dft_label+".log")
-                    mult = ccread(dft_log,loglevel=logging.ERROR).mult
-                    molecule = self.species.rmg_species[0]
-                    if molecule.to_smiles() != smiles:
-                        for mol in self.species.rmg_species:
-                            if mol.to_smiles() == smiles:
-                                molecule = mol
-                                break
-                    molecule.multiplicity = mult
-                    copyfile(log_path,
-                    os.path.join(arkane_dir,label+'.log'))
-                    model_chem = sp_method
-                    arkane_calc = Arkane_Input(molecule=molecule,modelChemistry=model_chem,directory=arkane_dir,
-                    gaussian_log_path=log_path)
-                    arkane_calc.write_molecule_file()
-                    if 'G' in sp_method:
-                        #arkane_calc.write_arkane_input(frequency_scale_factor=0.9854,useIsodesmicReactions=False,n_reactions_max=50)
-                        arkane_calc.write_arkane_input(frequency_scale_factor=0.9854,useAtomCorrections=True,useBondCorrections=True)
-                    else:
-                        #arkane_calc.write_arkane_input(useIsodesmicReactions=True,n_reactions_max=50)
-                        arkane_calc.write_arkane_input(useIsodesmicReactions=False,useBondCorrections=True,useAtomCorrections=True)
-                    yml_file = os.path.join(arkane_dir,'species','1.yml')
-                    
-                    if os.path.exists(yml_file):
-                        logging.info("It appears the arkane job has already been run")
-                    else:
-                        logging.info("staring arkane calc for {}".format(label))
-                        subprocess.Popen(
-                            """python $RMGpy/Arkane.py arkane_input.py""", 
-                            shell=True, cwd=arkane_calc.directory)
-                        while not os.path.exists(yml_file):
-                            time.sleep(10)
-                    time.sleep(5)
-                    os.remove(os.path.join(arkane_dir,label + ".log"))
-                    arkane_out = os.path.join(arkane_dir,'output.py')
-                    arkane_supporting = os.path.join(arkane_dir,'supporting_information.csv')
+                if options['dir_path']:
+                    dest = os.path.join(options['dir_path'],sp_method)
 
-                    if options['dir_path']:
-                        dest = os.path.join(options['dir_path'],sp_method)
+                if not os.path.exists(dest):
+                    os.makedirs(dest)
 
-                    if not os.path.exists(dest):
-                        os.makedirs(dest)
+                if os.path.exists(yml_file):
+                    copyfile(yml_file,os.path.join(dest,best_smiles + '.yml'))
+                    try:
+                        copyfile(arkane_out,os.path.join(dest,best_smiles + '_arkaneOutput.py'))
+                        copyfile(arkane_supporting,os.path.join(dest,best_smiles + '_arkaneSupporting.csv'))
+                    except:
+                        pass
+                    logging.info('Arkane job completed successfully!')
 
-                    if os.path.exists(yml_file):
-                        copyfile(yml_file,os.path.join(dest,smiles + '.yml'))
-                        try:
-                            copyfile(arkane_out,os.path.join(dest,smiles + '_arkaneOutput.py'))
-                            copyfile(arkane_supporting,os.path.join(dest,smiles + '_arkaneSupporting.csv'))
-                        except:
-                            pass
-                        logging.info('Arkane job completed successfully!')
-
-                    else:
-                        logging.info('It appears the arkane job failed or was never run for {}'.format(smiles))
-                        continue
+                else:
+                    logging.info('It appears the arkane job failed or was never run for {}'.format(smiles))
+                    continue
 
 
 
