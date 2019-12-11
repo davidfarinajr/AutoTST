@@ -278,8 +278,11 @@ class Gaussian():
             'natural_charges': data.atomcharges['natural'].tolist()
         }
 
-        with open('{}_nbo.yml'.format(mol_copy.to_smiles()), 'w') as f:
-            yaml.safe_dump(info, f)
+        try:
+            with open('{}_nbo.yml'.format(mol_copy.to_smiles()), 'w') as f:
+                yaml.safe_dump(info, f)
+        except:
+            pass
 
         return mol_copy
 
