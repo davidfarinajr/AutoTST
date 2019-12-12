@@ -181,7 +181,7 @@ class Gaussian():
         else:
             return '<Gaussian Calculator>'
 
-    def read_nbo_log(self,path):
+    def read_nbo_log(self,path,yml_dir):
         """
         Method to determine the representative Lewis structure from a Gaussian NBO calculation.
         Writes a yml file with results from nbo calculation.
@@ -280,7 +280,9 @@ class Gaussian():
         }
 
         try:
-            with open('{}_nbo.yml'.format(mol_copy.to_smiles()), 'w') as f:
+            outpath = os.path.join(
+                yml_dir, '{}_nbo.yml'.format(mol_copy.to_smiles()))
+            with open(outpath, 'w') as f:
                 yaml.safe_dump(info, f)
         except:
             pass
