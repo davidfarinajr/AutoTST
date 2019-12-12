@@ -963,14 +963,26 @@ class ThermoJob():
                     os.makedirs(dest)
 
                 if os.path.exists(yml_file):
-                    copyfile(yml_file,os.path.join(dest,best_smiles + '.yml'))
-                    try:
-                        copyfile(arkane_out,os.path.join(dest,best_smiles + '_arkaneOutput.py'))
-                        copyfile(arkane_supporting,os.path.join(dest,best_smiles + '_arkaneSupporting.csv'))
-                    except:
-                        pass
                     logging.info('Arkane job completed successfully!')
-
+                    yml_dest = os.path.join(dest, best_smiles + '.yml')
+                    if os.path.exists(yml_dest):
+                        with open(yml_dest, 'r') as f:
+                            data = yaml.safe_load(f)
+                            f.close()
+                        H298_existing = float(data['thermo_data']['H298']['value'])
+                        with open(yml_file, 'r') as f:
+                            data = yaml.safe_load(f)
+                            f.close()
+                        H298 = float(data['thermo_data']['H298']['value'])
+                        if H298 < H298_existing:
+                            copyfile(yml_file,yml_dest)
+                            try:
+                                copyfile(arkane_out,os.path.join(dest,best_smiles + '_arkaneOutput.py'))
+                                copyfile(arkane_supporting,os.path.join(dest,best_smiles + '_arkaneSupporting.csv'))
+                            except:
+                                pass
+                        else:
+                            logging.info("{} already exists and has lower enthalpy, not copying to {}".format(yml_dest,dest))
                 else:
                     logging.info('It appears the arkane job failed or was never run for {}'.format(smiles))
                     continue
