@@ -667,7 +667,7 @@ class ThermoJob():
             # Determine "best" Lewis structure from NBO calcuation
             logging.info("There are multiple resonance structures for {}".format(self.species))
             # Check for existing nbo log
-            nbo_dir = os.path.join(self.directory,"species",smiles,"nbo")
+            nbo_dir = os.path.join(self.directory,"species",method_name,smiles,"nbo")
             nbo_log = os.path.join(nbo_dir,smiles+'_nbo.log')
             if os.path.exists(nbo_log):
                 logging.info("NBO has already been calculated")
@@ -714,7 +714,7 @@ class ThermoJob():
                 if complete:
 
                     try:
-                        mol = calc.read_nbo_log(nbo_path)
+                        mol = self.calculator.read_nbo_log(nbo_path)
                         if mol.smiles != smiles:
                             logging.info("Based on NBO, the best smiles for {} is {}, not {}".format(
                                 self.species, mol.smiles, smiles))
