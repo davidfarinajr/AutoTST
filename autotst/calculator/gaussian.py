@@ -268,7 +268,8 @@ class Gaussian():
 
         info = {
             'info': data.metadata,
-            'smiles': mol_copy.to_smiles(),
+            'best_smiles': mol_copy.to_smiles(),
+            'resonance_smiles': [m.smiles for m in mol_copy.generate_resonance_structures()],
             'adj_list': mol.to_adjacency_list(),
             'mult': data.mult,
             'inchi': mol_copy.to_inchi(),
