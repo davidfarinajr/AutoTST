@@ -965,6 +965,7 @@ class ThermoJob():
                 if os.path.exists(yml_file):
                     logging.info('Arkane job completed successfully!')
                     yml_dest = os.path.join(dest, best_smiles + '.yml')
+                    copy = True
                     if os.path.exists(yml_dest):
                         with open(yml_dest, 'r') as f:
                             data = yaml.safe_load(f)
@@ -974,15 +975,18 @@ class ThermoJob():
                             data = yaml.safe_load(f)
                             f.close()
                         H298 = float(data['thermo_data']['H298']['value'])
-                        if H298 < H298_existing:
-                            copyfile(yml_file,yml_dest)
-                            try:
-                                copyfile(arkane_out,os.path.join(dest,best_smiles + '_arkaneOutput.py'))
-                                copyfile(arkane_supporting,os.path.join(dest,best_smiles + '_arkaneSupporting.csv'))
-                            except:
-                                pass
-                        else:
-                            logging.info("{} already exists and has lower enthalpy, not copying to {}".format(yml_dest,dest))
+                        if H298_existing < H298:
+                            copy = False
+                            logging.info("{} already exists and has lower enthalpy, not copying to {}".format(
+                                yml_dest, dest))
+                    
+                    if copy is True:
+                        copyfile(yml_file,yml_dest)
+                        try:
+                            copyfile(arkane_out,os.path.join(dest,best_smiles + '_arkaneOutput.py'))
+                            copyfile(arkane_supporting,os.path.join(dest,best_smiles + '_arkaneSupporting.csv'))
+                        except:
+                            pass
                 else:
                     logging.info('It appears the arkane job failed or was never run for {}'.format(smiles))
                     continue
