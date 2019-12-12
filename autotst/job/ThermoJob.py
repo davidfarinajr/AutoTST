@@ -678,7 +678,7 @@ class ThermoJob():
                     logging.info("Based on the NBO calc, the best smiles is {}".format(best_smiles))
                 else:
                     try:
-                        mol = self.calculator.read_nbo_log(nbo_log)
+                        mol = self.calculator.read_nbo_log(nbo_log, nbo_dir)
                         if mol.smiles != smiles:
                             logging.info("Based on NBO, the best smiles for {} is {}, not {}".format(
                                 self.species, mol.smiles, smiles))
@@ -714,7 +714,7 @@ class ThermoJob():
                 if complete:
 
                     try:
-                        mol = self.calculator.read_nbo_log(nbo_path)
+                        mol = self.calculator.read_nbo_log(nbo_path,nbo_dir)
                         if mol.smiles != smiles:
                             logging.info("Based on NBO, the best smiles for {} is {}, not {}".format(
                                 self.species, mol.smiles, smiles))
