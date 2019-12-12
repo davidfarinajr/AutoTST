@@ -677,20 +677,20 @@ class ThermoJob():
                     best_smiles = yml.split('_')[0]
                     logging.info("Based on the NBO calc, the best smiles is {}".format(best_smiles))
                 else:
-                    try:
-                        mol = self.calculator.read_nbo_log(nbo_log, nbo_dir)
-                        if mol.smiles != smiles:
-                            logging.info("Based on NBO, the best smiles for {} is {}, not {}".format(
-                                self.species, mol.smiles, smiles))
-                        else:
-                            logging.info("Based on NBO, the best smiles for {} is {}".format(
-                                self.species, mol.smiles))
-                        best_smiles = mol.smiles
-                        ref_conformer.rmg_molecule = mol
-                        ref_conformer.smiles = mol.smiles
-                    except:
-                        logging.info("An error occured when reading NBO log")
-                        best_smiles = smiles
+                    #try:
+                    mol = self.calculator.read_nbo_log(nbo_log, nbo_dir)
+                    if mol.smiles != smiles:
+                        logging.info("Based on NBO, the best smiles for {} is {}, not {}".format(
+                            self.species, mol.smiles, smiles))
+                    else:
+                        logging.info("Based on NBO, the best smiles for {} is {}".format(
+                            self.species, mol.smiles))
+                    best_smiles = mol.smiles
+                    ref_conformer.rmg_molecule = mol
+                    ref_conformer.smiles = mol.smiles
+                   # except:
+                        # logging.info("An error occured when reading NBO log")
+                        # best_smiles = smiles
 
             else:
                 logging.info(
@@ -713,20 +713,20 @@ class ThermoJob():
 
                 if complete:
 
-                    try:
-                        mol = self.calculator.read_nbo_log(nbo_path,nbo_dir)
-                        if mol.smiles != smiles:
-                            logging.info("Based on NBO, the best smiles for {} is {}, not {}".format(
-                                self.species, mol.smiles, smiles))
-                        else:
-                            logging.info("Based on NBO, the best smiles for {} is {}".format(
-                                self.species, mol.smiles))
-                        best_smiles = mol.smiles
-                        ref_conformer.rmg_molecule = mol
-                        ref_conformer.smiles = mol.smiles
-                    except:
-                        logging.info("An error occured when reading NBO log")
-                        best_smiles = smiles
+                    #try:
+                    mol = self.calculator.read_nbo_log(nbo_path,nbo_dir)
+                    if mol.smiles != smiles:
+                        logging.info("Based on NBO, the best smiles for {} is {}, not {}".format(
+                            self.species, mol.smiles, smiles))
+                    else:
+                        logging.info("Based on NBO, the best smiles for {} is {}".format(
+                            self.species, mol.smiles))
+                    best_smiles = mol.smiles
+                    ref_conformer.rmg_molecule = mol
+                    ref_conformer.smiles = mol.smiles
+                    # except:
+                    #     logging.info("An error occured when reading NBO log")
+                    #     best_smiles = smiles
 
                 # parser = ccread(dest, loglevel=logging.ERROR)
 
