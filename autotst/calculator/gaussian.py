@@ -227,7 +227,7 @@ class Gaussian():
                             bond.order -= occupancy/2
                         else:
                             bond.order += occupancy/2
-                if 'LP'in line:
+                if 'LP' in line and '*' not in line:
                     atom = atoms[int(line.split(')')[1].split()[1])-1]
                     orbital = int(line.split(')')[0].split()[-1])
                     occupancy = float(line.split(')')[1].split()[2])
@@ -235,10 +235,10 @@ class Gaussian():
                     if orbital not in list(atom.props.keys()):
                         atom.props[orbital] = occupancy
                     else:
-                        if '*' in line:
-                            atom.props[orbital] -= occupancy
-                        else:
-                            atom.props[orbital] += occupancy
+                        # if '*' in line:
+                        #     atom.props[orbital] -= occupancy
+                        # else:
+                        atom.props[orbital] += occupancy
             if 'Charge unit' in line:
                 _ = False
 
