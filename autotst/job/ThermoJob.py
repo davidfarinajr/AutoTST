@@ -664,42 +664,69 @@ class ThermoJob():
                 #     xyzpath))
 
         if len(self.species.smiles) > 1 and os.path.exists(log_path):
-
+            # Determine "best" Lewis structure from NBO calcuation
             logging.info("There are multiple resonance structures for {}".format(self.species))
-            logging.info(
-                "Performing NBO calculation to determine best Lewis structure for {}".format(self.species))
-            atoms = read_log(log_path)
-            ref_conformer._ase_molecule = atoms
-            ref_conformer.update_coords_from("ase")
-            self.calculator.conformer = ref_conformer
-            calc = self.calculator.get_nbo_calc()
-            label = calc.label
-            nbo_path = os.path.join(calc.scratch, calc.label + ".log")
-            logging.info(
-                "Submitting conformer calculation for {}".format(calc.label))
-            label = self._submit_conformer(ref_conformer, calc)
-            time.sleep(10)
-            while not check_complete(label=label, user=self.discovery_username):
+            # Check for existing nbo log
+            nbo_dir = os.path.join(self.directory,"species",smiles,"nbo")
+            nbo_log = os.path.join(nbo_dir,smiles+'_nbo.log')
+            if os.path.exists(nbo_log):
+                logging.info("NBO has already been calculated")
+                ymls = [f for f in os.listdir(nbo_dir) if f.endswith('.yml')]
+                if len(ymls) == 1:
+                    yml = ymls[0]
+                    best_smiles = yml.split('_')[0]
+                    logging.info("Based on the NBO calc, the best smiles is {}".format(best_smiles))
+                else:
+                    try:
+                        mol = self.calculator.read_nbo_log(nbo_log)
+                        if mol.smiles != smiles:
+                            logging.info("Based on NBO, the best smiles for {} is {}, not {}".format(
+                                self.species, mol.smiles, smiles))
+                        else:
+                            logging.info("Based on NBO, the best smiles for {} is {}".format(
+                                self.species, mol.smiles))
+                        best_smiles = mol.smiles
+                        ref_conformer.rmg_molecule = mol
+                        ref_conformer.smiles = mol.smiles
+                    except:
+                        logging.info("An error occured when reading NBO log")
+                        best_smiles = smiles
+
+            else:
+                logging.info(
+                    "Performing NBO calculation to determine best Lewis structure for {}".format(self.species))
+                atoms = read_log(log_path)
+                ref_conformer._ase_molecule = atoms
+                ref_conformer.update_coords_from("ase")
+                self.calculator.conformer = ref_conformer
+                calc = self.calculator.get_nbo_calc()
+                label = calc.label
+                nbo_path = os.path.join(calc.scratch, calc.label + ".log")
+                logging.info(
+                    "Submitting conformer calculation for {}".format(calc.label))
+                label = self._submit_conformer(ref_conformer, calc)
                 time.sleep(10)
+                while not check_complete(label=label, user=self.discovery_username):
+                    time.sleep(10)
 
-            complete, converged = self.calculator.verify_output_file(log_path)
+                complete, converged = self.calculator.verify_output_file(log_path)
 
-            if complete:
+                if complete:
 
-                try:
-                    mol = calc.read_nbo_log(nbo_path)
-                    if mol.smiles != smiles:
-                        logging.info("Based on NBO, the best smiles for {} is {}, not {}".format(
-                            self.species, mol.smiles, smiles))
-                    else:
-                        logging.info("Based on NBO, the best smiles for {} is {}".format(
-                            self.species, mol.smiles))
-                    best_smiles = mol.smiles
-                    ref_conformer.rmg_molecule = mol
-                    ref_conformer.smiles = mol.smiles
-                except:
-                    logging.info("An error occured when reading NBO log")
-                    best_smiles = smiles
+                    try:
+                        mol = calc.read_nbo_log(nbo_path)
+                        if mol.smiles != smiles:
+                            logging.info("Based on NBO, the best smiles for {} is {}, not {}".format(
+                                self.species, mol.smiles, smiles))
+                        else:
+                            logging.info("Based on NBO, the best smiles for {} is {}".format(
+                                self.species, mol.smiles))
+                        best_smiles = mol.smiles
+                        ref_conformer.rmg_molecule = mol
+                        ref_conformer.smiles = mol.smiles
+                    except:
+                        logging.info("An error occured when reading NBO log")
+                        best_smiles = smiles
 
                 # parser = ccread(dest, loglevel=logging.ERROR)
 
@@ -708,10 +735,10 @@ class ThermoJob():
                 # parser.writexyz(xyzpath)
 
                 # logging.info("The lowest energy xyz file is {}!".format(
-                #     xyzpath))
-            else:
-                logging.info("The NBO calculation failed")
-                best_smiles = smiles
+                    #     xyzpath))
+                else:
+                    logging.info("The NBO calculation failed")
+                    best_smiles = smiles
         else:
             best_smiles = smiles
                 
@@ -903,7 +930,7 @@ class ThermoJob():
                 arkane_calc = Arkane_Input(molecule=molecule,modelChemistry=model_chem,directory=arkane_dir,
                 gaussian_log_path=log_path)
                 arkane_calc.write_molecule_file()
-                if 'G' in sp_method:
+                if 'G4' in sp_method:
                     #arkane_calc.write_arkane_input(frequency_scale_factor=0.9854,useIsodesmicReactions=False,n_reactions_max=50)
                     arkane_calc.write_arkane_input(frequency_scale_factor=0.9854,useAtomCorrections=options["use_atom_corrections"], 
                     useBondCorrections=options["use_bond_corrections"],useIsodesmicReactions=options["use_isodesmic_reactions"])
