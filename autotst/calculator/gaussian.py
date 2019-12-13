@@ -101,30 +101,6 @@ def write_input(conformer, ase_calculator):
             ase_calculator.label + ".ase"
         ))
 
-def get_spin_partial_charges(log_path):
-    """
-    returns 2 lists:
-    list1 = arrays of Mulliken charges
-    list2 = arrays of spin densities
-    """
-    charges = []
-    spin_densities = []
-    n_atoms = None
-    info = open(log_path,'r').readlines()
-    for i,line in enumerate(info):
-        if not n_atoms and 'NAtoms=' in line:
-            n_atoms = int(line.split()[1])
-        elif 'Mulliken charges and spin densities:' in line:
-            charge = [float(l.split()[-2]) for l in info[i+2:i+2+n_atoms]]
-            spin_density = [float(l.split()[-1]) for l in info[i+2:i+2+n_atoms]]
-            charges.append(np.array(charge))
-            spin_densities.append(np.array(spin_density))
-        elif 'Mulliken charges:' in line:
-            charge = [float(l.split()[-1]) for l in info[i+2:i+2+n_atoms]]
-            charges.append(np.array(charge))
-
-    return charges,spin_densities
-
 
 class Gaussian():
 
@@ -285,7 +261,7 @@ class Gaussian():
         assert mol.multiplicity == data.mult,\
             "Multiplicities do not match ({} != {})".format(
                 mol.multiplicity, data.mult)
-
+        
         mol_copy = mol.copy(deep=True)
         for bond in mol_copy.get_all_edges():
             bond.order = round(bond.order)
@@ -312,6 +288,32 @@ class Gaussian():
             pass
 
         return mol_copy
+
+
+    def get_spin_partial_charges(self,log_path):
+        """
+        returns 2 lists:
+        list1 = arrays of Mulliken charges
+        list2 = arrays of spin densities
+        """
+        charges = []
+        spin_densities = []
+        n_atoms = None
+        info = open(log_path, 'r').readlines()
+        for i, line in enumerate(info):
+            if not n_atoms and 'NAtoms=' in line:
+                n_atoms = int(line.split()[1])
+            elif 'Mulliken charges and spin densities:' in line:
+                charge = [float(l.split()[-2]) for l in info[i+2:i+2+n_atoms]]
+                spin_density = [float(l.split()[-1])
+                                for l in info[i+2:i+2+n_atoms]]
+                charges.append(np.array(charge))
+                spin_densities.append(np.array(spin_density))
+            elif 'Mulliken charges:' in line:
+                charge = [float(l.split()[-1]) for l in info[i+2:i+2+n_atoms]]
+                charges.append(np.array(charge))
+
+        return charges, spin_densities
 
     def get_rotor_calc(self,
                        torsion_index=0,
