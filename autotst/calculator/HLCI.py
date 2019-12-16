@@ -122,11 +122,11 @@ class HLCI(object):
 
             for i, mol in enumerate(self.species.molecule):
                 if i not in self.nonreactive_structures:
-                    display(mol)
+                    print(mol.smiles)
                     print("wi = {0:.1f}%".format(self.w[i] * 100))
                 else:
                     print("non-reactive molecule:")
-                    display(mol)
+                    print(mol.smiles)
 
             print("time: ", time.time() - t0)
 
