@@ -687,13 +687,10 @@ class ThermoJob():
                         logging.info("Using HCLI to determing best Lewis Structure")
                         spcs = RMGSpecies().from_smiles(smiles)
                         spcs.generate_resonance_structures(keep_isomorphic=False)
-                        mol = HLCI(spc).species.molecule[0]
-                    if mol.smiles != smiles:
-                        logging.info("Based on NBO, the best smiles for {} is {}, not {}".format(
-                            self.species, mol.smiles, smiles))
-                    else:
-                        logging.info("Based on NBO, the best smiles for {} is {}".format(
-                            self.species, mol.smiles))
+                        mol = HLCI(spcs).species.molecule[0]
+    
+                    logging.info("the best smiles for {} is {}, not {}".format(
+                        self.species, mol.smiles, smiles))
                     best_smiles = mol.smiles
                     ref_conformer.rmg_molecule = mol
                     ref_conformer.smiles = mol.smiles
@@ -734,13 +731,10 @@ class ThermoJob():
                         spcs = RMGSpecies().from_smiles(smiles)
                         spcs.generate_resonance_structures(
                             keep_isomorphic=False)
-                        mol = HLCI(spc).species.molecule[0]
-                    if mol.smiles != smiles:
-                        logging.info("Based on NBO, the best smiles for {} is {}, not {}".format(
+                        mol = HLCI(spcs).species.molecule[0]
+
+                    logging.info("the best smiles for {} is {}, not {}".format(
                             self.species, mol.smiles, smiles))
-                    else:
-                        logging.info("Based on NBO, the best smiles for {} is {}".format(
-                            self.species, mol.smiles))
                     best_smiles = mol.smiles
                     ref_conformer.rmg_molecule = mol
                     ref_conformer.smiles = mol.smiles
