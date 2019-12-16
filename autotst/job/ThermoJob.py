@@ -1,6 +1,7 @@
 from autotst.calculator.gaussian import read_log,write_input,Gaussian
 from autotst.calculator.orca import Orca
 from autotst.calculator.arkane_input import Arkane_Input
+from autotst.calculator.HLCI import HLCI
 from autotst.species import Species, Conformer
 from autotst.geometry import Bond, Angle, Torsion, CisTrans, ChiralCenter
 import cclib
@@ -677,8 +678,16 @@ class ThermoJob():
                     best_smiles = yml.split('_')[0]
                     logging.info("Based on the NBO calc, the best smiles is {}".format(best_smiles))
                 else:
-                    #try:
-                    mol = self.calculator.read_nbo_log(nbo_log, nbo_dir)
+                    try:
+                        logging.info("Attempting to determine Lewis structure from NBO log")
+                        mol = self.calculator.read_nbo_log(nbo_log, nbo_dir)
+                    except:
+                        logging.info(
+                            "Could not determing Lewis Structure from NBO calculation")
+                        logging.info("Using HCLI to determing best Lewis Structure")
+                        spcs = RMGSpecies().from_smiles(smiles)
+                        spcs.generate_resonance_structures(keep_isomorphic=False)
+                        mol = HLCI(spc).species.molecule[0]
                     if mol.smiles != smiles:
                         logging.info("Based on NBO, the best smiles for {} is {}, not {}".format(
                             self.species, mol.smiles, smiles))
@@ -713,8 +722,19 @@ class ThermoJob():
 
                 if complete:
 
-                    #try:
-                    mol = self.calculator.read_nbo_log(nbo_path,nbo_dir)
+                    try:
+                        logging.info(
+                            "Attempting to determine Lewis structure from NBO log")
+                        mol = self.calculator.read_nbo_log(nbo_log, nbo_dir)
+                    except:
+                        logging.info(
+                            "Could not determing Lewis Structure from NBO calculation")
+                        logging.info(
+                            "Using HCLI to determing best Lewis Structure")
+                        spcs = RMGSpecies().from_smiles(smiles)
+                        spcs.generate_resonance_structures(
+                            keep_isomorphic=False)
+                        mol = HLCI(spc).species.molecule[0]
                     if mol.smiles != smiles:
                         logging.info("Based on NBO, the best smiles for {} is {}, not {}".format(
                             self.species, mol.smiles, smiles))
@@ -724,18 +744,6 @@ class ThermoJob():
                     best_smiles = mol.smiles
                     ref_conformer.rmg_molecule = mol
                     ref_conformer.smiles = mol.smiles
-                    # except:
-                    #     logging.info("An error occured when reading NBO log")
-                    #     best_smiles = smiles
-
-                # parser = ccread(dest, loglevel=logging.ERROR)
-
-                
-                # xyzpath = os.path.join(self.calculator.directory,"species",method_name,conformer.smiles,label+".xyz")
-                # parser.writexyz(xyzpath)
-
-                # logging.info("The lowest energy xyz file is {}!".format(
-                    #     xyzpath))
                 else:
                     logging.info("The NBO calculation failed")
                     best_smiles = smiles
