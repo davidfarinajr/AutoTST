@@ -147,6 +147,8 @@ class ThermoJob():
         if self.directory and not os.path.exists(self.directory):
             os.makedirs(self.directory)
 
+        self.rmg_mol = None
+
     def __repr__(self):
         return "< ThermoJob '{}'>".format(self.species)
 
@@ -673,36 +675,29 @@ class ThermoJob():
 
             if os.path.exists(nbo_log):
                 logging.info("NBO has already been calculated")
-                ymls = [f for f in os.listdir(nbo_dir) if f.endswith('.yml')]
-                if len(ymls) == 1:
-                    yml = ymls[0]
-                    best_smiles = yml.split('_')[0]
-                    logging.info("Based on the NBO calc, the best smiles is {}".format(best_smiles))
-                else:
+                try:
+                    logging.info("Attempting to determine Lewis structure from NBO log")
+                    mol = self.calculator.read_nbo_log(nbo_log, nbo_dir)
+                except:
+                    logging.info(
+                        "Could not determing Lewis Structure from NBO calculation")
+                    logging.info("Trying HCLI to determing best Lewis Structure")
                     try:
-                        logging.info("Attempting to determine Lewis structure from NBO log")
-                        mol = self.calculator.read_nbo_log(nbo_log, nbo_dir)
+                        spcs = RMGSpecies().from_smiles(smiles)
+                        spcs.generate_resonance_structures(
+                            keep_isomorphic=False)
+                        hlci = HLCI(spcs)
+                        index = hlci.w.index(max(hlci.w))
+                        mol = HLCI(spcs).species.molecule[index]
                     except:
+                        mol = self.species.rmg_species[0]
                         logging.info(
-                            "Could not determing Lewis Structure from NBO calculation")
-                        logging.info("Trying HCLI to determing best Lewis Structure")
-                        try:
-                            spcs = RMGSpecies().from_smiles(smiles)
-                            spcs.generate_resonance_structures(keep_isomorphic=False)
-                            mol = HLCI(spcs).species.molecule[0]
-                        except:
-                            mol = self.species.rmg_species[0]
-                            logging.info(
-                                "Could not determine best Lewis struture for species {}...using {} for structure".format(self.species,mol.smiles))
+                            "Could not determine best Lewis struture for species {}...using {} for structure".format(self.species,mol.smiles))
     
-                    logging.info("the best smiles for {} is {}".format(
-                        self.species, mol.smiles))
-                    best_smiles = mol.smiles
-                    ref_conformer.rmg_molecule = mol
-                    ref_conformer.smiles = mol.smiles
-                   # except:
-                        # logging.info("An error occured when reading NBO log")
-                        # best_smiles = smiles
+                logging.info("the best smiles for {} is {}".format(
+                    self.species, mol.smiles))
+                best_smiles = mol.smiles
+                self.rmg_mol = mol
 
             else:
                 logging.info(
@@ -723,37 +718,34 @@ class ThermoJob():
 
                 complete, converged = self.calculator.verify_output_file(log_path)
 
-                if complete:
-
+                try:
+                    logging.info(
+                        "Attempting to determine Lewis structure from NBO log")
+                    mol = self.calculator.read_nbo_log(nbo_log, nbo_dir)
+                except:
+                    logging.info(
+                        "Could not determing Lewis Structure from NBO calculation")
+                    logging.info(
+                        "Trying HCLI to determing best Lewis Structure")
                     try:
-                        logging.info(
-                            "Attempting to determine Lewis structure from NBO log")
-                        mol = self.calculator.read_nbo_log(nbo_log, nbo_dir)
+                        spcs = RMGSpecies().from_smiles(smiles)
+                        spcs.generate_resonance_structures(
+                            keep_isomorphic=False)
+                        hlci = HLCI(spcs)
+                        index = hlci.w.index(max(hlci.w))
+                        mol = HLCI(spcs).species.molecule[index]
                     except:
+                        mol = self.species.rmg_species[0]
                         logging.info(
-                            "Could not determing Lewis Structure from NBO calculation")
-                        logging.info(
-                            "Trying HCLI to determing best Lewis Structure")
-                        try:
-                            spcs = RMGSpecies().from_smiles(smiles)
-                            spcs.generate_resonance_structures(
-                                keep_isomorphic=False)
-                            mol = HLCI(spcs).species.molecule[0]
-                        except:
-                            mol = self.species.rmg_species[0]
-                            logging.info(
-                                "Could not determine best Lewis struture for species {}...using {} for structure".format(self.species, mol.smiles))
+                            "Could not determine best Lewis struture for species {}...using {} for structure".format(self.species, mol.smiles))
 
-                    logging.info("the best smiles for {} is {}".format(
-                        self.species, mol.smiles))
-                    best_smiles = mol.smiles
-                    ref_conformer.rmg_molecule = mol
-                    ref_conformer.smiles = mol.smiles
-                else:
-                    logging.info("The NBO calculation failed")
-                    best_smiles = smiles
+                logging.info("the best smiles for {} is {}".format(
+                    self.species, mol.smiles))
+                best_smiles = mol.smiles
+                self.rmg_mol = mol
         else:
             best_smiles = smiles
+            self.rmg_mol =  self.species.rmg_species[0]
                 
 
         if options["calculate_fod"]:  # We will run an orca FOD job
@@ -800,7 +792,7 @@ class ThermoJob():
             assert os.path.exists(log_path)
             mult = ccread(log_path,loglevel=logging.ERROR).mult
             copyfile(log_path,os.path.join(arkane_dir,label + ".log"))
-            molecule = RMGMolecule(smiles=best_smiles)
+            molecule = self.rmg_mol
             # molecule = self.species.rmg_species[i]
             # if molecule.to_smiles() != smiles:
             #     for mol in self.species.rmg_species:
@@ -929,7 +921,7 @@ class ThermoJob():
                 dft_label =  "{}_{}_optfreq".format(smiles,method_name)
                 dft_log = os.path.join(self.directory,"species",method_name,smiles,dft_label+".log")
                 mult = ccread(dft_log,loglevel=logging.ERROR).mult
-                molecule = RMGMolecule(smiles=best_smiles)
+                molecule = self.rmg_mol
                 # molecule = self.species.rmg_species[0]
                 # if molecule.to_smiles() != smiles:
                 #     for mol in self.species.rmg_species:
