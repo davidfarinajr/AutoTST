@@ -670,6 +670,7 @@ class ThermoJob():
             # Check for existing nbo log
             nbo_dir = os.path.join(self.directory,"species",method_name,smiles,"nbo")
             nbo_log = os.path.join(nbo_dir,smiles+'_nbo.log')
+
             if os.path.exists(nbo_log):
                 logging.info("NBO has already been calculated")
                 ymls = [f for f in os.listdir(nbo_dir) if f.endswith('.yml')]
@@ -684,13 +685,18 @@ class ThermoJob():
                     except:
                         logging.info(
                             "Could not determing Lewis Structure from NBO calculation")
-                        logging.info("Using HCLI to determing best Lewis Structure")
-                        spcs = RMGSpecies().from_smiles(smiles)
-                        spcs.generate_resonance_structures(keep_isomorphic=False)
-                        mol = HLCI(spcs).species.molecule[0]
+                        logging.info("Trying HCLI to determing best Lewis Structure")
+                        try:
+                            spcs = RMGSpecies().from_smiles(smiles)
+                            spcs.generate_resonance_structures(keep_isomorphic=False)
+                            mol = HLCI(spcs).species.molecule[0]
+                        except:
+                            mol = self.species.rmg_species[0]
+                            logging.info(
+                                "Could not determine best Lewis struture for species {}...using {} for structure".format(self.species,mol.smiles))
     
-                    logging.info("the best smiles for {} is {}, not {}".format(
-                        self.species, mol.smiles, smiles))
+                    logging.info("the best smiles for {} is {}".format(
+                        self.species, mol.smiles))
                     best_smiles = mol.smiles
                     ref_conformer.rmg_molecule = mol
                     ref_conformer.smiles = mol.smiles
@@ -727,14 +733,19 @@ class ThermoJob():
                         logging.info(
                             "Could not determing Lewis Structure from NBO calculation")
                         logging.info(
-                            "Using HCLI to determing best Lewis Structure")
-                        spcs = RMGSpecies().from_smiles(smiles)
-                        spcs.generate_resonance_structures(
-                            keep_isomorphic=False)
-                        mol = HLCI(spcs).species.molecule[0]
+                            "Trying HCLI to determing best Lewis Structure")
+                        try:
+                            spcs = RMGSpecies().from_smiles(smiles)
+                            spcs.generate_resonance_structures(
+                                keep_isomorphic=False)
+                            mol = HLCI(spcs).species.molecule[0]
+                        except:
+                            mol = self.species.rmg_species[0]
+                            logging.info(
+                                "Could not determine best Lewis struture for species {}...using {} for structure".format(self.species, mol.smiles))
 
-                    logging.info("the best smiles for {} is {}, not {}".format(
-                            self.species, mol.smiles, smiles))
+                    logging.info("the best smiles for {} is {}".format(
+                        self.species, mol.smiles))
                     best_smiles = mol.smiles
                     ref_conformer.rmg_molecule = mol
                     ref_conformer.smiles = mol.smiles
