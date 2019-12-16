@@ -260,38 +260,39 @@ class Gaussian():
         mol.update_multiplicity()
         mol.update_connectivity_values()
 
-        if mol.get_net_charge() != data.charge:
-            logging.warning("Charges do not match ({} != {})".format(
-                mol.get_net_charge(), data.charge))
-            logging.info("Attempting to resolve charge mismatch...")
 
-            if mol.get_net_charge() > 0:
-                positive_atoms = [
-                    atom for atom in mol.atoms if atom.charge == 1 and atom.radical_electrons > 0]
-                for atom in positive_atoms:
-                    atom.decrement_radical()
-                    atom.increment_lone_pairs()
-                    atom.update_charge()
+            # logging.info("Attempting to resolve charge mismatch...")
 
-            elif mol.get_net_charge() < 0:
-                negative_atoms = [
-                    atom for atom in mol.atoms if atom.charge == -1 and atom.lone_pairs > 0]
-                for atom in negative_atoms:
-                    atom.decrement_lone_pairs()
-                    atom.increment_radical()
-                    atom.update_charge()
+            # if mol.get_net_charge() > 0:
+            #     positive_atoms = [
+            #         atom for atom in mol.atoms if atom.charge == 1 and atom.radical_electrons > 0]
+            #     for atom in positive_atoms:
+            #         atom.decrement_radical()
+            #         atom.increment_lone_pairs()
+            #         atom.update_charge()
 
-            mol.update_lone_pairs()
-            mol.update_multiplicity()
-            if mol.get_net_charge() != data.charge:
-                logging.warning("Failed to match charges ({} != {}), returning None".format(
-                    mol.get_net_charge(), data.charge))
-                return None
+            # elif mol.get_net_charge() < 0:
+            #     negative_atoms = [
+            #         atom for atom in mol.atoms if atom.charge == -1 and atom.lone_pairs > 0]
+            #     for atom in negative_atoms:
+            #         atom.decrement_lone_pairs()
+            #         atom.increment_radical()
+            #         atom.update_charge()
+
+            # mol.update_lone_pairs()
+            # mol.update_multiplicity()
+            # if mol.get_net_charge() != data.charge:
+            #     logging.warning("Failed to match charges ({} != {}), returning None".format(
+            #         mol.get_net_charge(), data.charge))
+            #   return None
         
-        if mol.multiplicity != data.mult:
-            logging.warning("Multiplicities do not match ({} != {}), returning None".format(
-                mol.multiplicity, data.mult))
-            return None
+        # if mol.multiplicity != data.mult:
+        #     # radical_electrons = data.mult - 1
+        #     # radical_atom_ids_spin_density = sorted(spins[-1].argsort()[-radical_electrons:][::-1].tolist())
+        #     # radical_atom_ids_mol = sorted([atom.id -1 for atom in mol.atoms if atom.radical_electrons > 0])
+        #     logging.warning("Multiplicities do not match ({} != {}), returning None".format(
+        #         mol.multiplicity, data.mult))
+        #     return None
 
         # Validate with spin density 
         if data.mult > 1:
@@ -307,6 +308,12 @@ class Gaussian():
         mol_copy = mol.copy(deep=True)
         for bond in mol_copy.get_all_edges():
             bond.order = round(bond.order)
+        
+        mol_copy.update_multiplicity()
+        mol_copy.update_connectivity_values()
+
+        assert mol_copy.get_net_charge() == data.charge
+        assert mol_copy.multiplicity == data.mult
 
         info = {
             'info': data.metadata,
