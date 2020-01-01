@@ -357,8 +357,7 @@ class ThermoJob():
                 conformer.smiles,
                 "sp"
             )
-            label = calc.label
-
+            calc.label = "{}_{}".format(conformer.smiles, sp_method)
             logging.info("Removing the old log file that didn't converge, restarting from last geometry")
             os.remove(log_path)
 
@@ -915,9 +914,12 @@ class ThermoJob():
                 sp_dir = os.path.join(self.directory,"species",method_name,smiles,"sp")
                 log_path = os.path.join(sp_dir,label + '.log')
                 complete, converged = self.calculator.verify_output_file(log_path)
+
                 if not all([complete,converged]):
                     logging.info("It seems the log file {} is incomplete or didnt converge".format(log_path))
                     continue
+                conf = Conformer(smiles=self.rmg_mol.smiles)
+                assert check_isomorphic(conf,log_path)
                 dft_label =  "{}_{}_optfreq".format(smiles,method_name)
                 dft_log = os.path.join(self.directory,"species",method_name,smiles,dft_label+".log")
                 mult = ccread(dft_log,loglevel=logging.ERROR).mult
