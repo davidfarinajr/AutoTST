@@ -25,6 +25,7 @@ from shutil import move, copyfile, rmtree
 import numpy as np
 import pandas as pd
 import subprocess
+from subprocess import STDOUT, check_output, TimeoutExpired
 import multiprocessing
 from multiprocessing import Process, Manager
 import logging
@@ -47,14 +48,30 @@ def check_complete(label, user):
     A method to determine if a job is still running
     """
     command = """squeue -n "{}" -u "{}" """.format(label,user)
-    output = subprocess.Popen(
-        command,
-        shell=True,
-        stdout=subprocess.PIPE).communicate()[0]
+    try:
+        output = check_output(command, shell= True, timeout=20)
+    except TimeoutExpired as e:
+        logging.info(e)
+        return False
+    
     if len(output.decode("utf-8").splitlines()) <= 1:
         return True
     else:
         return False
+
+def get_jobs_in_queue(user):
+    """
+    A method to determine number of user's jobs currently in the queue
+    """
+    command = """squeue -u "{}" """.format(user)
+    try:
+        output = check_output(command, shell= True, timeout=20)
+    except TimeoutExpired as e:
+        time.sleep(300)
+        output = get_jobs_in_queue(user)
+
+    jobs = len(output.decode("utf-8").splitlines()) - 2
+    return jobs
 
 def check_isomorphic(conformer,log_path):
     """
@@ -187,10 +204,21 @@ class ThermoJob():
                 )
             else:
                 logging.info("Starting calculations for {}".format(conformer))
-            subprocess.Popen(
-                """sbatch --exclude=c5003 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p {1} -N 1 -n {2} -t {3} --mem={4} $AUTOTST/autotst/job/submit.sh""".format(
-                    label,calc.parameters["partition"],calc.parameters["nprocshared"],calc.parameters["time"],calc.parameters["mem"]), shell=True, cwd=calc.scratch)
 
+            output = subprocess.check_output(
+                """sbatch --exclude=c5003 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p {1} -N 1 -n {2} -t {3} --mem={4} $AUTOTST/autotst/job/submit.sh""".format(
+                    label,calc.parameters["partition"],calc.parameters["nprocshared"],calc.parameters["time"],calc.parameters["mem"]), shell=True, cwd=calc.scratch, stderr=STDOUT
+                    ).decode("utf-8")  
+            
+            if 'Job violates accounting/QOS policy' in output:
+                number_of_jobs =  self.get_jobs_in_queue(self.discovery_username)
+                time.sleep(300)
+                jobs = self.get_jobs_in_queue(self.discovery_username)
+                while jobs >= number_of_jobs:
+                    time.sleep(300)
+                    jobs = self.get_jobs_in_queue(self.discovery_username)
+                self._submit_conformer(conformer, calc, restart)
+            
         return label
 
 
@@ -503,6 +531,7 @@ class ThermoJob():
                             "vary_multiplicity" : False,
                             "rmsd_cutoff" : 0.1,
                             "energy_cutoff" : 20,
+                            "max_conformers" : None,
                             "run_arkane_dft" : False,
                             "run_arkane_sp": True,
                             "use_atom_corrections": True,
@@ -575,6 +604,7 @@ class ThermoJob():
                         delta = options['delta'],
                         rmsd_cutoff = options['rmsd_cutoff'],
                         energy_cutoff = options['energy_cutoff'],
+                        max_conformers = options["max_conformers"], 
                         multiplicity = options["vary_multiplicity"])
 
                 currently_running = []
@@ -617,7 +647,7 @@ class ThermoJob():
                         atoms = read_log(path)
                         conformer._ase_molecule = atoms
                         conformer.update_coords_from("ase")
-                        complete, converged = self.calculator.verify_output_file(log)
+                        complete, converged = self.calculator.verify_output_file(path)
                         if not all([complete, converged]): 
                             logging.info("It appears {} is incomplete or did not converge".format(f))
                             continue
