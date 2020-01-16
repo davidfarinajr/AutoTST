@@ -382,6 +382,38 @@ class Gaussian():
         Returns:
         - calc (ASEGaussian): an ASEGaussian calculator with all of the proper setting specified
         """
+
+        if self.settings["sp"] == 'G4':
+            self.settings["method"] = "B3LYP"
+            self.settings["basis"] = "6-31G(2df,p)"
+            self.settings["dispersion"] = None
+
+        convergence = self.settings["convergence"].upper()
+
+        self.settings["mem"] = '10GB'
+        num_atoms = self.conformer.rmg_molecule.get_num_atoms()
+
+        if num_atoms <= 4:
+            self.settings["nprocshared"] = 2
+            self.settings["time"] = '12:00:00'
+        elif num_atoms <= 8:
+            self.settings["mem"] = '15GB'
+            self.settings["nprocshared"] = 4
+            self.settings["time"] = '12:00:00'
+        elif num_atoms <= 15:
+            self.settings["mem"] = '20GB'
+            self.settings["nprocshared"] = 6
+            self.settings["time"] = '12:00:00'
+        elif num_atoms <= 20:
+            self.settings["mem"] = '30GB'
+            self.settings["nprocshared"] = 8
+            self.settings["time"] = '12:00:00'
+        else:
+            self.settings["mem"] = '40GB'
+            self.settings["nprocshared"] = 12
+            self.settings["time"] = '12:00:00'
+
+        
         torsion = self.conformer.torsions[torsion_index]
 
         assert (torsion and (isinstance(torsion, Torsion))
@@ -408,21 +440,22 @@ class Gaussian():
             label = conformer_dir = self.conformer.smiles
             label += "_{}by{}_{}_{}".format(steps, int(step_size), j, k)
             conformer_type = "species"
-            extra = "Opt=(CalcFC,ModRedun)"
+            extra = "Opt=(CalcFC,ModRedun,{})".format(convergence)
 
         for locked_torsion in self.conformer.torsions:  # TODO: maybe doesn't work;
             if sorted(locked_torsion.atom_indices) != sorted(torsion.atom_indices):
                 a, b, c, d = locked_torsion.atom_indices
                 addsec += 'D {0} {1} {2} {3} F\n'.format(a+1, b+1, c+1, d+1)
 
-        self.conformer.rmg_molecule.update_multiplicity()
+        # self.conformer.rmg_molecule.update_multiplicity()
         mult = self.conformer.rmg_molecule.multiplicity
 
         new_scratch = os.path.join(
             self.directory,
             conformer_type,
+            self.opt_method,
             conformer_dir,
-            "rotors"
+            "conformers"
         )
 
         ase_gaussian = ASEGaussian(
@@ -437,6 +470,10 @@ class Gaussian():
             addsec=[addsec[:-1]])
 
         ase_gaussian.atoms = self.conformer.ase_molecule
+        ase_gaussian.directory = new_scratch
+        ase_gaussian.label = label
+        ase_gaussian.parameters["partition"] = self.settings["partition"]
+        ase_gaussian.parameters["time"] = self.settings["time"]
         del ase_gaussian.parameters['force']
         return ase_gaussian
 
@@ -482,12 +519,10 @@ class Gaussian():
             self.settings["mem"] = '30GB'
             self.settings["nprocshared"] = 8
             self.settings["time"] = '12:00:00'
-            self.settings["mem"] = '20GB'
         else:
             self.settings["mem"] = '40GB'
             self.settings["nprocshared"] = 12
             self.settings["time"] = '12:00:00'
-            self.settings["mem"] = '20GB'
 
         if isinstance(self.conformer, TS):
             logging.info(
