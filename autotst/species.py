@@ -187,8 +187,9 @@ class Species():
 
     def generate_conformers(self, ase_calculator,
                             delta=float(120),
-                            rmsd_cutoff = 'default',
-                            energy_cutoff = 'default',
+                            rmsd_cutoff = 0.1, #angstroms
+                            energy_cutoff = 10.0, #kcal/mol
+                            max_conformers = None,
                             multiplicity = False,
                             ):
 
@@ -201,6 +202,7 @@ class Species():
                                             delta = delta,
                                             multiplicity=multiplicity,
                                             rmsd_cutoff =rmsd_cutoff,
+                                            max_conformers=max_conformers,
                                             energy_cutoff = energy_cutoff
                                             )
             self.conformers[smiles] = conformers
