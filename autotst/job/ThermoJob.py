@@ -204,7 +204,7 @@ class ThermoJob():
         """
 
         self.calculator.conformer = conformer
-        self.calculator.settings["convergence"] = "Tight"
+        #self.calculator.settings["convergence"] = "Tight"
         calc = self.calculator.get_conformer_calc()
         label = calc.label
         log_path = os.path.join(calc.scratch,calc.label + ".log")
@@ -213,7 +213,7 @@ class ThermoJob():
         label = self._submit_conformer(conformer,calc)
         time.sleep(15)
         while not check_complete(label=label,user=self.discovery_username):
-            time.sleep(15)
+            time.sleep(300)
 
         complete, converged = self.calculator.verify_output_file(log_path)
 
@@ -221,11 +221,12 @@ class ThermoJob():
             logging.info(
                 "It seems that the file never completed for {} completed, running it again".format(calc.label))
             calc.parameters["time"] = "24:00:00"
-            calc.parameters["nprocshared"] = 16
+            calc.parameters["mem"] = "30GB"
+            calc.parameters["nprocshared"] = 8
             label = self._submit_conformer(conformer,calc,restart=True)
-            time.sleep(10)
+            time.sleep(60)
             while not check_complete(label=label,user=self.discovery_username):
-                time.sleep(15)
+                time.sleep(300)
 
             complete, converged = self.calculator.verify_output_file(log_path)
 
@@ -237,11 +238,12 @@ class ThermoJob():
             logging.info(
                 "It appears that {} was killed prematurely".format(calc.label))
             calc.parameters["time"] = "24:00:00"
-            calc.parameters["nprocshared"] = 16
+            calc.parameters["nprocshared"] = 8
+            calc.parameters["mem"] = '30GB'
             label = self._submit_conformer(conformer,calc, restart=True)
-            time.sleep(10)
+            time.sleep(60)
             while not check_complete(label=label,user=self.discovery_username):
-                time.sleep(15)
+                time.sleep(300)
 
             complete, converged = self.calculator.verify_output_file(log_path)
             if (complete and converged):
@@ -252,23 +254,30 @@ class ThermoJob():
                 return False
 
         if not converged:
+
+            if self.calculator.settings["convergence"] not in ["verytight", "tight"]:
+                logging.info("{} did not converge".format(calc.label))
+                return False
+    
             logging.info("{} did not converge, trying it as a looser convergence criteria".format(calc.label))
 
             logging.info("Resubmitting {} with default convergence criteria".format(conformer))
-            atoms = read_log(log_path)
-            conformer._ase_molecule = atoms
-            conformer.update_coords_from("ase")
+            try:
+                atoms = read_log(log_path)
+                conformer._ase_molecule = atoms
+                conformer.update_coords_from("ase")
+            except:
+                pass
+            logging.info("Removing the old log file that didn't converge, restarting from last geometry")
+            os.remove(log_path)
             self.calculator.conformer = conformer
             self.calculator.settings["convergence"] = ""
             calc = self.calculator.get_conformer_calc()
 
-            logging.info("Removing the old log file that didn't converge, restarting from last geometry")
-            os.remove(log_path)
-
             label = self._submit_conformer(conformer,calc)
-            time.sleep(10)
+            time.sleep(60)
             while not check_complete(label=label,user=self.discovery_username):
-                time.sleep(15)
+                time.sleep(300)
 
             if not os.path.exists(log_path):
                 logging.info(
@@ -310,9 +319,9 @@ class ThermoJob():
         logging.info(
             "Submitting {} calculation".format(calc.label))
         label = self._submit_conformer(conformer,calc)
-        time.sleep(10)
+        time.sleep(60)
         while not check_complete(label=label,user=self.discovery_username):
-            time.sleep(15)
+            time.sleep(300)
 
         complete, converged = self.calculator.verify_output_file(log_path)
 
@@ -326,9 +335,9 @@ class ThermoJob():
             calc.parameters["nprocshared"] = 16
             calc.parameters["mem"] = "300Gb"
             label = self._submit_conformer(conformer,calc, restart=True)
-            time.sleep(10)
+            time.sleep(60)
             while not check_complete(label=label,user=self.discovery_username):
-                time.sleep(15)
+                time.sleep(300)
 
             complete, converged = self.calculator.verify_output_file(log_path)
             
@@ -362,9 +371,9 @@ class ThermoJob():
             os.remove(log_path)
 
             label = self._submit_conformer(conformer,calc)
-            time.sleep(10)
+            time.sleep(60)
             while not check_complete(label=label,user=self.discovery_username):
-                time.sleep(15)
+                time.sleep(300)
 
             if not os.path.exists(log_path):
                 logging.info(
@@ -384,9 +393,9 @@ class ThermoJob():
                 calc.parameters["nprocshared"] = 16
                 calc.parameters["mem"] = "300Gb"
                 label = self._submit_conformer(conformer,calc, restart=True)
-                time.sleep(10)
+                time.sleep(60)
                 while not check_complete(label=label,user=self.discovery_username):
-                    time.sleep(15)
+                    time.sleep(300)
 
                 complete, converged = self.calculator.verify_output_file(log_path)
             
@@ -463,10 +472,10 @@ class ThermoJob():
             subprocess.Popen(
                 """sbatch --exclude=c5003,c3040 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p test,general -N 1 -n 4 -t 10:00 --mem=5GB $AUTOTST/autotst/job/orca_submit.sh""".format(
                     label), shell=True, cwd=orca_calc.directory)
-            time.sleep(10)
+            time.sleep(60)
         # wait unitl the job is done
         while not check_complete(label=label, user=self.discovery_username):
-            time.sleep(10)
+            time.sleep(300)
 
         # If the log file exits, check to see if it terminated normally
         if os.path.exists(file_path + ".log"):
@@ -605,10 +614,14 @@ class ThermoJob():
                             "It seems that {} was never run...".format(f))
                         continue
                     try:
-                        parser = ccread(path, loglevel=logging.ERROR)
                         atoms = read_log(path)
                         conformer._ase_molecule = atoms
                         conformer.update_coords_from("ase")
+                        complete, converged = self.calculator.verify_output_file(log)
+                        if not all([complete, converged]): 
+                            logging.info("It appears {} is incomplete or did not converge".format(f))
+                            continue
+                        parser = ccread(path, loglevel=logging.ERROR)
                         if not check_isomorphic(conformer=conformer,log_path=path):
                             logging.info("{}_{} is not isomorphic with starting species".format(conformer.smiles, conformer.index))
                             continue
@@ -620,7 +633,7 @@ class ThermoJob():
                     except:
                         logging.info(
                             "The parser does not have an scf energies attribute, we are not considering {}".format(f))
-                        energy = 1e5
+                        continue
 
                     results.append([energy, conformer, f])
 
@@ -711,9 +724,9 @@ class ThermoJob():
                 logging.info(
                     "Submitting conformer calculation for {}".format(calc.label))
                 label = self._submit_conformer(ref_conformer, calc)
-                time.sleep(10)
+                time.sleep(60)
                 while not check_complete(label=label, user=self.discovery_username):
-                    time.sleep(10)
+                    time.sleep(300)
 
                 complete, converged = self.calculator.verify_output_file(log_path)
 
@@ -812,7 +825,7 @@ class ThermoJob():
                     """python $RMGpy/Arkane.py arkane_input.py""", 
                     shell=True, cwd=arkane_calc.directory)
                 while not os.path.exists(yml_file):
-                    time.sleep(10)
+                    time.sleep(300)
             time.sleep(5)
             os.remove(os.path.join(arkane_dir,label + ".log"))
             dest = os.path.join(
@@ -902,7 +915,7 @@ class ThermoJob():
             method_name,
             smiles,
             "sp",
-            'arkane'
+            'arkane_rmg'
             )
 
             if not os.path.exists(arkane_dir):
@@ -957,7 +970,7 @@ class ThermoJob():
                         """python $RMGpy/Arkane.py arkane_input.py""", 
                         shell=True, cwd=arkane_calc.directory)
                     while not os.path.exists(yml_file):
-                        time.sleep(10)
+                        time.sleep(300)
                 time.sleep(5)
                 os.remove(os.path.join(arkane_dir,label + ".log"))
                 arkane_out = os.path.join(arkane_dir,'output.py')
