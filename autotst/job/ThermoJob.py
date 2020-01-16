@@ -204,11 +204,15 @@ class ThermoJob():
                 )
             else:
                 logging.info("Starting calculations for {}".format(conformer))
-
-            output = subprocess.check_output(
-                """sbatch --exclude=c5003 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p {1} -N 1 -n {2} -t {3} --mem={4} $AUTOTST/autotst/job/submit.sh""".format(
-                    label,calc.parameters["partition"],calc.parameters["nprocshared"],calc.parameters["time"],calc.parameters["mem"]), shell=True, cwd=calc.scratch, stderr=STDOUT
-                    ).decode("utf-8")  
+            try:
+                output = subprocess.check_output(
+                    """sbatch --exclude=c5003 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p {1} -N 1 -n {2} -t {3} --mem={4} $AUTOTST/autotst/job/submit.sh""".format(
+                        label,calc.parameters["partition"],calc.parameters["nprocshared"],calc.parameters["time"],calc.parameters["mem"]), shell=True, cwd=calc.scratch, stderr=STDOUT
+                        ).decode("utf-8") 
+                logging.info("Starting calculations for {}".format(conformer))
+            except TimeoutExpired as e:
+                time.sleep(10)
+                self._submit_conformer(conformer, calc, restart)
             
             if 'Job violates accounting/QOS policy' in output:
                 number_of_jobs =  self.get_jobs_in_queue(self.discovery_username)
