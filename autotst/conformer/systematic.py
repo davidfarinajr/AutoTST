@@ -108,7 +108,8 @@ def find_all_combos(
 def systematic_search(conformer,
                       delta=float(120),
                       energy_cutoff = 10.0, #kcal/mol
-                      rmsd_cutoff = 0.5, #angstroms
+                      rmsd_cutoff = 0.1, #angstroms
+                      max_conformers = None,
                       cistrans = True,
                       chiral_centers = True,
                       multiplicity = False,
@@ -363,6 +364,16 @@ def systematic_search(conformer,
 
     redundant = list(set(redundant))
     df.drop(df.index[redundant], inplace=True)
+
+    if max_conformers is not None:
+        if len(df) > max_conformers:
+            logging.info("{} > {}, reducing energy cutoff to reduce conformer count".format(len(df), max_conformers))
+            df = df.iloc[:max_conformers]
+            energies = df.energy.values
+            energy_span = (energies.max() - energies.min()) / \
+                units.kcal * units.mol * units.eV  # kcal/mol
+            logging.info("Energy cutoff reduced from {} to {} kcal/mol to reduce conformer count to {} conformers".format(
+                energy_cutoff, energy_span, len(df)))
 
     if multiplicity and conformer.rmg_molecule.multiplicity > 2:
         rads = conformer.rmg_molecule.get_radical_count()
