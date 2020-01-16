@@ -471,18 +471,22 @@ class Gaussian():
             self.settings["nprocshared"] = 1
             self.settings["time"] = '12:00:00'
         elif num_atoms <= 8:
-            self.settings["nprocshared"] = 2
+            self.settings["mem"] = '15GB'
+            self.settings["nprocshared"] = 3
             self.settings["time"] = '12:00:00'
         elif num_atoms <= 15:
-            self.settings["nprocshared"] = 4
+            self.settings["mem"] = '20GB'
+            self.settings["nprocshared"] = 6
             self.settings["time"] = '12:00:00'
         elif num_atoms <= 20:
+            self.settings["mem"] = '30GB'
             self.settings["nprocshared"] = 8
             self.settings["time"] = '12:00:00'
             self.settings["mem"] = '20GB'
         else:
+            self.settings["mem"] = '40GB'
             self.settings["nprocshared"] = 12
-            self.settings["time"] = '24:00:00'
+            self.settings["time"] = '12:00:00'
             self.settings["mem"] = '20GB'
 
         if isinstance(self.conformer, TS):
