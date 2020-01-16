@@ -151,7 +151,10 @@ def systematic_search(conformer,
     
     if not isinstance(conformer, TS):
         reference_mol = conformer.rmg_molecule.copy(deep=True)
-        reference_mol = reference_mol.to_single_bonds()
+        try:
+            reference_mol = reference_mol.to_single_bonds()
+        except:
+            pass
     manager = Manager()
     return_dict = manager.dict()
     pool = multiprocessing.Pool()
