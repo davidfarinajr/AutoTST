@@ -600,7 +600,7 @@ class ThermoJob():
 
         for torsion in conformer.torsions:
             ase_calculator = self.calculator.get_rotor_calc(
-                torsion_index)
+                torsion.index)
             label = self._submit_conformer(
                 conformer, ase_calculator)
             logging.info(label)
@@ -613,7 +613,7 @@ class ThermoJob():
 
         while not done:
             for label in list(complete.keys()):
-                if not self.check_complete(label):
+                if not check_complete(label,self.discovery_username):
                     continue
                 if done:
                     continue
@@ -668,7 +668,7 @@ class ThermoJob():
 
             label = self.submit_conformer(conformer)
 
-            while not self.check_complete(label):
+            while not check_complete(label,self.discovery_username):
                 time.sleep(300)
 
             logging.info(
@@ -1274,12 +1274,13 @@ class ThermoJob():
             conformer = Conformer(smiles=self.rmg_mol.smiles)
             conformer.smiles = smiles
             assert check_isomorphic(conformer,log_path)
-            conformer.rmg_molecule = self.rmg_molecule
+            conformer.rmg_molecule = self.rmg_mol
             atoms = read_log(log_path)
             mult = ccread(log_path, loglevel=logging.ERROR).mult
             conformer._ase_molecule = atoms
             conformer.update_coords_from("ase")
             conformer.rmg_molecule.multiplicity = mult
+            self.calculator.conformer = conformer
             self.calculate_rotors(
                 conformer, steps=36, step_size=10.0)
 

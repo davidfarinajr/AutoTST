@@ -455,7 +455,7 @@ class Gaussian():
             conformer_type,
             self.opt_method,
             conformer_dir,
-            "conformers"
+            "rotors"
         )
 
         ase_gaussian = ASEGaussian(
