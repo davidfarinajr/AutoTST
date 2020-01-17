@@ -1271,7 +1271,7 @@ class ThermoJob():
             complete, converged = self.calculator.verify_output_file(log_path)
             if not all([complete,converged]):
                 logging.info("It seems the log file {} is incomplete or didnt converge".format(log_path))
-            conformer = Conformer(smiles=self.rmg_mol)
+            conformer = Conformer(smiles=self.rmg_mol.smiles)
             conformer.smiles = smiles
             assert check_isomorphic(conformer,log_path)
             conformer.rmg_molecule = self.rmg_molecule
