@@ -42,12 +42,11 @@ logging.basicConfig(format=FORMAT, level=logging.INFO)
 
 class Arkane_Input():
 
-    def __init__(self, molecule=None, modelChemistry=None, directory=None, gaussian_log_path=None, energy_log_path=None, geometry_log_path=None, frequencies_log_path=None):
+    def __init__(self, conformer=None, modelChemistry=None, directory=None, gaussian_log_path=None, energy_log_path=None, geometry_log_path=None, frequencies_log_path=None, rotors_dir=None):
         
-        self.molecule = molecule
+        self.conformer = conformer
         self.modelChemistry = modelChemistry
-        self.smiles = self.molecule.to_smiles()
-        self.label = self.smiles + '_arkane'
+        self.label = self.conformer.smiles + '_arkane'
         self.directory = directory
         if gaussian_log_path:
             self.energy_log_path = self.geometry_log_path = self.frequencies_log_path = gaussian_log_path
@@ -55,18 +54,67 @@ class Arkane_Input():
             self.energy_log_path = energy_log_path
             self.geometry_log_path = geometry_log_path
             self.frequencies_log_path = frequencies_log_path
-
+        
+        self.rotors_dir = rotors_dir
         self.command = '$RMGpy/Arkane.py'
+
+    def get_rotor_info(self,torsion):
+        """
+        Formats and returns info about torsion as it should appear in an Arkane species.py
+
+        The following are needed for an Arkane input file:
+        - scanLog :: Gaussian output log of freq calculation on optimized geometry
+        - pivots  :: torsion center: j,k of i,j,k,l (Note Arkane begins indexing with 1)
+        - top     :: ID of all atoms in one top (Note Arkane begins indexing with 1)
+
+        Parameters:
+        - conformer (Conformer): autotst conformer object
+        - torsion (Torsion): autotst torsion object 
+
+
+        Returns:
+        - info (str): a string containing all of the relevant information for a hindered rotor scan
+        """
+        torsion = self.conformer.torsions[torsion_index]
+        _, j, k, _ = torsion.atom_indices
+
+        # Adjusted since mol's IDs start from 0 while Arkane's start from 1
+        tor_center_adj = [j+1, k+1]
+
+   
+        tor_log = os.path.join(
+            self.rotors_dir,
+            self.conformer.smiles + '_36by10_{0}_{1}.log'.format(j, k)
+        )
+
+        if not os.path.exists(tor_log):
+            logging.info(
+                "Torsion log file does not exist for {}".format(torsion))
+            return ""
+
+        top_IDs = []
+        for num, tf in enumerate(torsion.mask):
+            if tf:
+                top_IDs.append(num)
+
+        # Adjusted to start from 1 instead of 0
+        top_IDs_adj = [ID+1 for ID in top_IDs]
+
+        info = "     HinderedRotor(scanLog=Log('{0}'), pivots={1}, top={2}, fit='best'),".format(
+            tor_log, tor_center_adj, top_IDs_adj)
+
+        return info
 
     def write_molecule_file(self):
 
         if not os.path.exists(self.directory):
             os.makedirs(self.directory)
 
-        linear = self.molecule.is_linear()
-        sym_num = self.molecule.calculate_symmetry_number()
-        mult = self.molecule.multiplicity
-        path = os.path.join(self.directory,self.smiles+'.py')
+        linear = self.conformer.rmg_molecule.is_linear()
+        sym_num = self.conformer.rmg_molecule.calculate_symmetry_number()
+        mult = self.conformer.rmg_molecule.multiplicity
+        path = os.path.join(
+            self.directory, self.conformer.rmg_molecule.smiles +'.py')
         energy_path = os.path.basename(self.energy_log_path)
         geometry_path = os.path.basename(self.geometry_log_path)
         frequencies_path = os.path.basename(self.frequencies_log_path)
@@ -75,8 +123,8 @@ class Arkane_Input():
             logging.warning("RMG sym number is 0.5!  Setting sym number to 1.0")
             sym_num = 1.0
 
-        with open(path,'w+') as f:
-            f.write('#SMILES = {}\n'.format(self.smiles))
+        with open(path,'w') as f:
+            f.write('#SMILES = {}\n'.format(self.conformer.rmg_molecule.smiles))
             f.write('linear = {}\n'.format(linear))
             f.write('externalSymmetry = {}\n'.format(sym_num))
             f.write('spinMultiplicity = {}\n'.format(mult))
@@ -84,11 +132,16 @@ class Arkane_Input():
             f.write('geometry = GaussianLog("{}")\n'.format(geometry_path))
             f.write('frequencies = GaussianLog("{}")\n'.format(frequencies_path))
             f.write('energy = GaussianLog("{}")\n'.format(energy_path))
+            if self.rotors_dir is not None:
+                f.write('rotors = [\n')
+                for torsion in self.conformer.torsions:
+                    f.write(self.get_rotor_info(torsion) + '\n')
+                f.write(']')
             f.close()
 
         return path
 
-    def write_arkane_input(self,frequency_scale_factor=1.0, useIsodesmicReactions=False, useAtomCorrections=False, useBondCorrections=False, 
+    def write_arkane_input(self, frequency_scale_factor=1.0, useIsodesmicReactions=False, useAtomCorrections=False, useBondCorrections=False,
                             useHinderedRotors=False, constraint_classes=None, n_reactions_max = 50, 
                             max_ref_uncertainty = None, deviation_coeff = 3.0):
         
@@ -113,7 +166,8 @@ class Arkane_Input():
                 f.write('max_ref_uncertainty = {}\n'.format(max_ref_uncertainty))
                 f.write('deviation_coeff = {}\n'.format(deviation_coeff))
             f.write('\n')
-            f.write('species("{0}","./{1}.py",structure = SMILES("{1}"))\n'.format(1,self.smiles))
+            f.write('species("{0}","./{1}.py",structure = SMILES("{1}"))\n'.format(
+                1, self.conformer.rmg_molecule.smiles))
             f.write('\n')
             f.write('thermo("{}","NASA")\n'.format(1))
             f.close()
