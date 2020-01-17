@@ -145,7 +145,8 @@ class Arkane_Input():
                             useHinderedRotors=False, constraint_classes=None, n_reactions_max = 50, 
                             max_ref_uncertainty = None, deviation_coeff = 3.0):
         
-        molecule_file_path = os.path.join(self.directory,self.smiles+'.py')
+        molecule_file_path = os.path.join(
+            self.directory, self.conformer.rmg_molecule.smiles + '.py')
         if not os.path.exists(molecule_file_path):
             molecule_file_path = self.write_molecule_file()
         
