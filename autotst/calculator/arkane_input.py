@@ -75,7 +75,7 @@ class Arkane_Input():
         Returns:
         - info (str): a string containing all of the relevant information for a hindered rotor scan
         """
-        torsion = self.conformer.torsions[torsion_index]
+        
         _, j, k, _ = torsion.atom_indices
 
         # Adjusted since mol's IDs start from 0 while Arkane's start from 1
@@ -135,7 +135,10 @@ class Arkane_Input():
             if self.rotors_dir is not None:
                 f.write('rotors = [\n')
                 for torsion in self.conformer.torsions:
-                    f.write(self.get_rotor_info(torsion) + '\n')
+                    info = self.get_rotor_info(torsion)
+                    if len(info) == 0:
+                        continue
+                    f.write(info + '\n')
                 f.write(']')
             f.close()
 
