@@ -22,7 +22,7 @@ import rdkit
 import os
 import time
 import yaml
-from shutil import move, copyfile, rmtree
+from shutil import move, copyfile, copytree, rmtree
 import numpy as np
 import pandas as pd
 import subprocess
@@ -1334,9 +1334,10 @@ class ThermoJob():
                 copyfile(log_path,
                 os.path.join(arkane_dir,label+'.log'))
                 model_chem = sp_method
-                if options['rotors'] is True:   
-                    shutil.copytree(os.path.join(
-                        self.directory, self.opt_method, smiles, 'rotors'), os.path.join(arkane_dir))
+                if options['rotors'] is True:
+                    if not os.path.exists(os.path.join(arkane_dir,'rotors')):
+                        copytree(os.path.join(
+                        self.directory, 'species', self.method_name, smiles, 'rotors'), os.path.join(arkane_dir,'rotors'))
                     arkane_calc = Arkane_Input(conformer=conf,modelChemistry=model_chem,directory=arkane_dir,
                 gaussian_log_path=log_path, rotors_dir=os.path.join(arkane_dir,'rotors'))
                     arkane_calc.write_arkane_input(frequency_scale_factor=0.9854,useAtomCorrections=options["use_atom_corrections"],

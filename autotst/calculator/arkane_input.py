@@ -136,7 +136,9 @@ class Arkane_Input():
             if self.rotors_dir is not None:
                 f.write('rotors = [\n')
                 for torsion in self.conformer.torsions:
+                    logging.info(torsion)
                     info = self.get_rotor_info(torsion)
+                    logging.info(info)
                     if len(info) == 0:
                         continue
                     f.write(info + '\n')
