@@ -883,6 +883,7 @@ class ThermoJob():
         basis_set = self.calculator.settings['basis'].upper()
         method_name = self.method_name
         smiles = self.species.smiles[0]
+        self.torsion_conformer = None
 
         if options["dir_path"]:
             dest2 = os.path.join(options["dir_path"],self.method_name)
@@ -1283,6 +1284,7 @@ class ThermoJob():
             conformer._ase_molecule = atoms
             conformer.update_coords_from("ase")
             conformer.rmg_molecule.multiplicity = mult
+            self.torsion_conformer = conformer.copy()
             self.calculator.conformer = conformer
             self.calculate_rotors(
                 conformer, steps=36, step_size=10.0)
@@ -1301,7 +1303,7 @@ class ThermoJob():
             method_name,
             smiles,
             "sp",
-            'arkane'
+            'arkane_rotors'
             )
 
             if not os.path.exists(arkane_dir):
@@ -1312,39 +1314,48 @@ class ThermoJob():
                 label = smiles + '_' + sp_method
                 sp_dir = os.path.join(self.directory,"species",method_name,smiles,"sp")
                 log_path = os.path.join(sp_dir,label + '.log')
-                complete, converged = self.calculator.verify_output_file(log_path)
 
-                if not all([complete,converged]):
-                    logging.info("It seems the log file {} is incomplete or didnt converge".format(log_path))
-                    continue
-                conf = Conformer(smiles=self.rmg_mol.smiles)
-                assert check_isomorphic(conf,log_path)
-                dft_label =  "{}_{}_optfreq".format(smiles,method_name)
-                dft_log = os.path.join(self.directory,"species",method_name,smiles,dft_label+".log")
-                mult = ccread(dft_log,loglevel=logging.ERROR).mult
-                molecule = self.rmg_mol
-                # molecule = self.species.rmg_species[0]
-                # if molecule.to_smiles() != smiles:
-                #     for mol in self.species.rmg_species:
-                #         if mol.to_smiles() == smiles:
-                #             molecule = mol
-                #             break
-                molecule.multiplicity = mult
+                if self.torsion_conformer is not None:
+                    conf = self.torsion_conformer
+                else:
+                    
+                    complete, converged = self.calculator.verify_output_file(log_path)
+                    if not all([complete,converged]):
+                        logging.info("It seems the log file {} is incomplete or didnt converge".format(log_path))
+                        continue
+                    conf = Conformer(smiles=self.rmg_mol.smiles)
+                    assert check_isomorphic(conf,log_path)
+                    dft_label =  "{}_{}_optfreq".format(smiles,method_name)
+                    dft_log = os.path.join(self.directory,"species",method_name,smiles,dft_label+".log")
+                    mult = ccread(dft_log,loglevel=logging.ERROR).mult
+                    molecule = self.rmg_mol
+                    molecule.multiplicity = mult
+                
                 copyfile(log_path,
                 os.path.join(arkane_dir,label+'.log'))
                 model_chem = sp_method
-                arkane_calc = Arkane_Input(molecule=molecule,modelChemistry=model_chem,directory=arkane_dir,
-                gaussian_log_path=log_path)
-                arkane_calc.write_molecule_file()
-                if 'G4' in sp_method:
-                    #arkane_calc.write_arkane_input(frequency_scale_factor=0.9854,useIsodesmicReactions=False,n_reactions_max=50)
-                    arkane_calc.write_arkane_input(frequency_scale_factor=0.9854,useAtomCorrections=options["use_atom_corrections"], 
-                    useBondCorrections=options["use_bond_corrections"],useIsodesmicReactions=options["use_isodesmic_reactions"])
+                if options['rotors'] is True:   
+                    arkane_calc = Arkane_Input(conformer=conf,modelChemistry=model_chem,directory=arkane_dir,
+                gaussian_log_path=log_path,rotors_dir='../../rotors')
+                    arkane_calc.write_arkane_input(frequency_scale_factor=0.9854, , useAtomCorrections=options["use_atom_corrections"],
+                                                   useBondCorrections=options["use_bond_corrections"], useIsodesmicReactions=options["use_isodesmic_reactions"],
+                                                   useHinderedRotors=True)
                 else:
-                    #arkane_calc.write_arkane_input(useIsodesmicReactions=True,n_reactions_max=50)
-                    arkane_calc.write_arkane_input(
-                        useAtomCorrections=options["use_atom_corrections"], useBondCorrections=options["use_bond_corrections"],
-                        useIsodesmicReactions=options["use_isodesmic_reactions"])
+                    arkane_calc = Arkane_Input(conformer=conf, modelChemistry=model_chem, directory=arkane_dir,
+                                               gaussian_log_path=log_path)
+                    arkane_calc.write_arkane_input(frequency_scale_factor=0.9854, , useAtomCorrections=options["use_atom_corrections"],
+                                                   useBondCorrections=options["use_bond_corrections"], useIsodesmicReactions=options["use_isodesmic_reactions"]
+                                                    )
+
+                # if 'G4' in sp_method:
+                #     #arkane_calc.write_arkane_input(frequency_scale_factor=0.9854,useIsodesmicReactions=False,n_reactions_max=50)
+                #     arkane_calc.write_arkane_input(frequency_scale_factor=0.9854,useAtomCorrections=options["use_atom_corrections"], 
+                #     useBondCorrections=options["use_bond_corrections"],useIsodesmicReactions=options["use_isodesmic_reactions"])
+                # else:
+                #     #arkane_calc.write_arkane_input(useIsodesmicReactions=True,n_reactions_max=50)
+                #     arkane_calc.write_arkane_input(
+                #         useAtomCorrections=options["use_atom_corrections"], useBondCorrections=options["use_bond_corrections"],
+                #         useIsodesmicReactions=options["use_isodesmic_reactions"])
                 
                 yml_file = os.path.join(arkane_dir,'species','1.yml')
                 
@@ -1356,8 +1367,8 @@ class ThermoJob():
                         """python $RMGpy/Arkane.py arkane_input.py""", 
                         shell=True, cwd=arkane_calc.directory)
                     while not os.path.exists(yml_file):
-                        time.sleep(120)
-                time.sleep(5)
+                        time.sleep(60)
+                time.sleep(10)
                 os.remove(os.path.join(arkane_dir,label + ".log"))
                 arkane_out = os.path.join(arkane_dir,'output.py')
                 arkane_supporting = os.path.join(arkane_dir,'supporting_information.csv')
