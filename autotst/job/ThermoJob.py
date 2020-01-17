@@ -1337,13 +1337,13 @@ class ThermoJob():
                 if options['rotors'] is True:   
                     arkane_calc = Arkane_Input(conformer=conf,modelChemistry=model_chem,directory=arkane_dir,
                 gaussian_log_path=log_path,rotors_dir='../../rotors')
-                    arkane_calc.write_arkane_input(frequency_scale_factor=0.9854, , useAtomCorrections=options["use_atom_corrections"],
+                    arkane_calc.write_arkane_input(frequency_scale_factor=0.9854,useAtomCorrections=options["use_atom_corrections"],
                                                    useBondCorrections=options["use_bond_corrections"], useIsodesmicReactions=options["use_isodesmic_reactions"],
                                                    useHinderedRotors=True)
                 else:
                     arkane_calc = Arkane_Input(conformer=conf, modelChemistry=model_chem, directory=arkane_dir,
                                                gaussian_log_path=log_path)
-                    arkane_calc.write_arkane_input(frequency_scale_factor=0.9854, , useAtomCorrections=options["use_atom_corrections"],
+                    arkane_calc.write_arkane_input(frequency_scale_factor=0.9854,useAtomCorrections=options["use_atom_corrections"],
                                                    useBondCorrections=options["use_bond_corrections"], useIsodesmicReactions=options["use_isodesmic_reactions"]
                                                     )
 
