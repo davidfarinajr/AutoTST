@@ -1335,8 +1335,10 @@ class ThermoJob():
                 os.path.join(arkane_dir,label+'.log'))
                 model_chem = sp_method
                 if options['rotors'] is True:   
+                    shutil.copytree(os.path.join(
+                        self.directory, self.opt_method, smiles, 'rotors'), os.path.join(arkane_dir))
                     arkane_calc = Arkane_Input(conformer=conf,modelChemistry=model_chem,directory=arkane_dir,
-                gaussian_log_path=log_path,rotors_dir='../../rotors')
+                gaussian_log_path=log_path, rotors_dir=os.path.join(arkane_dir,'rotors'))
                     arkane_calc.write_arkane_input(frequency_scale_factor=0.9854,useAtomCorrections=options["use_atom_corrections"],
                                                    useBondCorrections=options["use_bond_corrections"], useIsodesmicReactions=options["use_isodesmic_reactions"],
                                                    useHinderedRotors=True)
@@ -1370,6 +1372,8 @@ class ThermoJob():
                         time.sleep(60)
                 time.sleep(10)
                 os.remove(os.path.join(arkane_dir,label + ".log"))
+                if os.path.exists(os.path.join(arkane_dir,'rotors')):
+                    shutil.rmtree(os.path.join(arkane_dir,'rotors'))
                 arkane_out = os.path.join(arkane_dir,'output.py')
                 arkane_supporting = os.path.join(arkane_dir,'supporting_information.csv')
 

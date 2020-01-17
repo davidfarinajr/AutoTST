@@ -75,7 +75,7 @@ class Arkane_Input():
         Returns:
         - info (str): a string containing all of the relevant information for a hindered rotor scan
         """
-        
+
         _, j, k, _ = torsion.atom_indices
 
         # Adjusted since mol's IDs start from 0 while Arkane's start from 1
@@ -92,6 +92,7 @@ class Arkane_Input():
                 "Torsion log file does not exist for {}".format(torsion))
             return ""
 
+        tor_log = os.path.join(os.path.basename(self.rotors_dir), self.conformer.smiles + '_36by10_{0}_{1}.log'.format(j, k))
         top_IDs = []
         for num, tf in enumerate(torsion.mask):
             if tf:
