@@ -3,6 +3,7 @@ from autotst.calculator.orca import Orca
 from autotst.calculator.arkane_input import Arkane_Input
 from autotst.calculator.HLCI import HLCI
 from autotst.species import Species, Conformer
+from autotst.reaction import Reaction, TS
 from autotst.geometry import Bond, Angle, Torsion, CisTrans, ChiralCenter
 import cclib
 from cclib.io import ccread
@@ -49,7 +50,7 @@ def check_complete(label, user):
     """
     command = """squeue -n "{}" -u "{}" """.format(label,user)
     try:
-        output = check_output(command, shell= True, timeout=20)
+        output = check_output(command, shell= True, timeout=30)
     except TimeoutExpired as e:
         logging.info(e)
         return False
@@ -65,9 +66,9 @@ def get_jobs_in_queue(user):
     """
     command = """squeue -u "{}" """.format(user)
     try:
-        output = check_output(command, shell= True, timeout=20)
+        output = check_output(command, shell= True, timeout=30)
     except TimeoutExpired as e:
-        time.sleep(300)
+        time.sleep(120)
         output = get_jobs_in_queue(user)
 
     jobs = len(output.decode("utf-8").splitlines()) - 2
@@ -216,10 +217,10 @@ class ThermoJob():
             
             if 'Job violates accounting/QOS policy' in output:
                 number_of_jobs =  self.get_jobs_in_queue(self.discovery_username)
-                time.sleep(300)
+                time.sleep(120)
                 jobs = self.get_jobs_in_queue(self.discovery_username)
                 while jobs >= number_of_jobs:
-                    time.sleep(300)
+                    time.sleep(120)
                     jobs = self.get_jobs_in_queue(self.discovery_username)
                 self._submit_conformer(conformer, calc, restart)
             
@@ -245,7 +246,7 @@ class ThermoJob():
         label = self._submit_conformer(conformer,calc)
         time.sleep(15)
         while not check_complete(label=label,user=self.discovery_username):
-            time.sleep(300)
+            time.sleep(120)
 
         complete, converged = self.calculator.verify_output_file(log_path)
 
@@ -258,7 +259,7 @@ class ThermoJob():
             label = self._submit_conformer(conformer,calc,restart=True)
             time.sleep(60)
             while not check_complete(label=label,user=self.discovery_username):
-                time.sleep(300)
+                time.sleep(120)
 
             complete, converged = self.calculator.verify_output_file(log_path)
 
@@ -275,7 +276,7 @@ class ThermoJob():
             label = self._submit_conformer(conformer,calc, restart=True)
             time.sleep(60)
             while not check_complete(label=label,user=self.discovery_username):
-                time.sleep(300)
+                time.sleep(120)
 
             complete, converged = self.calculator.verify_output_file(log_path)
             if (complete and converged):
@@ -309,7 +310,7 @@ class ThermoJob():
             label = self._submit_conformer(conformer,calc)
             time.sleep(60)
             while not check_complete(label=label,user=self.discovery_username):
-                time.sleep(300)
+                time.sleep(120)
 
             if not os.path.exists(log_path):
                 logging.info(
@@ -353,7 +354,7 @@ class ThermoJob():
         label = self._submit_conformer(conformer,calc)
         time.sleep(60)
         while not check_complete(label=label,user=self.discovery_username):
-            time.sleep(300)
+            time.sleep(120)
 
         complete, converged = self.calculator.verify_output_file(log_path)
 
@@ -369,7 +370,7 @@ class ThermoJob():
             label = self._submit_conformer(conformer,calc, restart=True)
             time.sleep(60)
             while not check_complete(label=label,user=self.discovery_username):
-                time.sleep(300)
+                time.sleep(120)
 
             complete, converged = self.calculator.verify_output_file(log_path)
             
@@ -405,7 +406,7 @@ class ThermoJob():
             label = self._submit_conformer(conformer,calc)
             time.sleep(60)
             while not check_complete(label=label,user=self.discovery_username):
-                time.sleep(300)
+                time.sleep(120)
 
             if not os.path.exists(log_path):
                 logging.info(
@@ -427,7 +428,7 @@ class ThermoJob():
                 label = self._submit_conformer(conformer,calc, restart=True)
                 time.sleep(60)
                 while not check_complete(label=label,user=self.discovery_username):
-                    time.sleep(300)
+                    time.sleep(120)
 
                 complete, converged = self.calculator.verify_output_file(log_path)
             
@@ -507,7 +508,7 @@ class ThermoJob():
             time.sleep(60)
         # wait unitl the job is done
         while not check_complete(label=label, user=self.discovery_username):
-            time.sleep(300)
+            time.sleep(120)
 
         # If the log file exits, check to see if it terminated normally
         if os.path.exists(file_path + ".log"):
@@ -669,7 +670,7 @@ class ThermoJob():
             label = self.submit_conformer(conformer)
 
             while not check_complete(label,self.discovery_username):
-                time.sleep(300)
+                time.sleep(120)
 
             logging.info(
                 "Reoptimization complete... performing hindered rotors scans again")
@@ -737,6 +738,8 @@ class ThermoJob():
 
         continuous = self.check_rotor_continuous(
             steps, step_size, parser=parser)
+        if continuous is True:
+            logging.info("Rotor scan {} is continuous".format(label))
         [lowest_conf, energy, atomnos,
             atomcoords] = self.check_rotor_lowest_conf(parser=parser)
         #opt_count_check = self.check_rotor_opts(steps, parser=parser)
@@ -1086,7 +1089,7 @@ class ThermoJob():
                 label = self._submit_conformer(ref_conformer, calc)
                 time.sleep(60)
                 while not check_complete(label=label, user=self.discovery_username):
-                    time.sleep(300)
+                    time.sleep(120)
 
                 complete, converged = self.calculator.verify_output_file(log_path)
 
@@ -1185,7 +1188,7 @@ class ThermoJob():
                     """python $RMGpy/Arkane.py arkane_input.py""", 
                     shell=True, cwd=arkane_calc.directory)
                 while not os.path.exists(yml_file):
-                    time.sleep(300)
+                    time.sleep(120)
             time.sleep(5)
             os.remove(os.path.join(arkane_dir,label + ".log"))
             dest = os.path.join(
@@ -1353,7 +1356,7 @@ class ThermoJob():
                         """python $RMGpy/Arkane.py arkane_input.py""", 
                         shell=True, cwd=arkane_calc.directory)
                     while not os.path.exists(yml_file):
-                        time.sleep(300)
+                        time.sleep(120)
                 time.sleep(5)
                 os.remove(os.path.join(arkane_dir,label + ".log"))
                 arkane_out = os.path.join(arkane_dir,'output.py')
