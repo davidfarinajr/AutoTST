@@ -258,7 +258,7 @@ class ThermoJob():
             calc.parameters["mem"] = "30GB"
             calc.parameters["nprocshared"] = 8
             label = self._submit_conformer(conformer,calc,restart=True)
-            time.sleep(60)
+            time.sleep(15)
             while not check_complete(label=label,user=self.discovery_username):
                 time.sleep(120)
 
@@ -275,7 +275,7 @@ class ThermoJob():
             calc.parameters["nprocshared"] = 8
             calc.parameters["mem"] = '30GB'
             label = self._submit_conformer(conformer,calc, restart=True)
-            time.sleep(60)
+            time.sleep(15)
             while not check_complete(label=label,user=self.discovery_username):
                 time.sleep(120)
 
@@ -309,7 +309,7 @@ class ThermoJob():
             calc = self.calculator.get_conformer_calc()
 
             label = self._submit_conformer(conformer,calc)
-            time.sleep(60)
+            time.sleep(15)
             while not check_complete(label=label,user=self.discovery_username):
                 time.sleep(120)
 
@@ -353,9 +353,9 @@ class ThermoJob():
         logging.info(
             "Submitting {} calculation".format(calc.label))
         label = self._submit_conformer(conformer,calc,restart)
-        time.sleep(60)
+        time.sleep(15)
         while not check_complete(label=label,user=self.discovery_username):
-            time.sleep(120)
+            time.sleep(60)
 
         complete, converged = self.calculator.verify_output_file(log_path)
 
@@ -369,9 +369,9 @@ class ThermoJob():
             calc.parameters["nprocshared"] = 16
             calc.parameters["mem"] = "300Gb"
             label = self._submit_conformer(conformer,calc, restart=True)
-            time.sleep(60)
+            time.sleep(15)
             while not check_complete(label=label,user=self.discovery_username):
-                time.sleep(120)
+                time.sleep(60)
 
             complete, converged = self.calculator.verify_output_file(log_path)
             
@@ -405,9 +405,9 @@ class ThermoJob():
             os.remove(log_path)
 
             label = self._submit_conformer(conformer,calc)
-            time.sleep(60)
+            time.sleep(15)
             while not check_complete(label=label,user=self.discovery_username):
-                time.sleep(120)
+                time.sleep(60)
 
             if not os.path.exists(log_path):
                 logging.info(
@@ -429,7 +429,7 @@ class ThermoJob():
                 label = self._submit_conformer(conformer,calc, restart=True)
                 time.sleep(60)
                 while not check_complete(label=label,user=self.discovery_username):
-                    time.sleep(120)
+                    time.sleep(60)
 
                 complete, converged = self.calculator.verify_output_file(log_path)
             
@@ -550,7 +550,7 @@ class ThermoJob():
             logging.info(label)
             complete[label] = False
             verified[label] = False
-            time.sleep(10)
+            time.sleep(5)
 
         done = False
         lowest_energy_label = None
@@ -621,7 +621,7 @@ class ThermoJob():
                 assert False
             
             sp_dir = os.path.join(self.directory,"species",self.method_name,conformer.smiles,"sp")
-            label = smiles + '_' + 'G4'
+            label = conformer.smiles + '_' + 'G4'
             log_path = os.path.join(sp_dir,label + '.log')
             complete, converged = self.calculator.verify_output_file(log_path)
             if not all([complete,converged]):
@@ -643,7 +643,7 @@ class ThermoJob():
             label = self._submit_conformer(conformer,calc,restart=True)
             time.sleep(15)
             while not check_complete(label=label,user=self.discovery_username):
-                time.sleep(120)
+                time.sleep(60)
 
             logging.info(
                 "Reoptimization complete... performing hindered rotors scans again")
@@ -810,7 +810,7 @@ class ThermoJob():
 
         return continuous
 
-    def check_rotor_lowest_conf(self, parser, tol=0.1):
+    def check_rotor_lowest_conf(self, parser, tol=0.0207):
 
         symbol_dict = {
             53: "I",
@@ -843,6 +843,7 @@ class ThermoJob():
                 atoms.append(Atom(symbol=symbol_dict[atom_num], position=coords))
             atoms = Atoms(atoms)
             # atoms = read_log(file_name)
+            conformer = Conformer(smiles=self.rmg_mol.smiles)
             conformer._ase_molecule = atoms
             conformer.update_coords_from("ase")
             starting_molecule = RMGMolecule(smiles=conformer.smiles)
@@ -861,33 +862,33 @@ class ThermoJob():
         return (True, None)
 
 
-        opt_indices = [i for i, status in enumerate(
-            parser.optstatus) if status in (2,4,5)]
-        opt_SCFEnergies = [parser.scfenergies[index] for index in opt_indices]
+        # opt_indices = [i for i, status in enumerate(
+        #     parser.optstatus) if status in (2,4,5)]
+        # opt_SCFEnergies = [parser.scfenergies[index] for index in opt_indices]
 
-        max_energy,min_energy = (max(opt_SCFEnergies),min(opt_SCFEnergies))
-        min_energy = min(opt_SCFEnergies)
-        energy_tol = tol*(max_energy - min_energy)
+        # max_energy,min_energy = (max(opt_SCFEnergies),min(opt_SCFEnergies))
+        # min_energy = min(opt_SCFEnergies)
+        # energy_tol = tol*(max_energy - min_energy)
 
-        first_is_lowest = True  # Therefore...
-        min_idx = 0
-        min_energy = opt_SCFEnergies[min_idx]
+        # first_is_lowest = True  # Therefore...
+        # min_idx = 0
+        # min_energy = opt_SCFEnergies[min_idx]
 
-        for i, energy in enumerate(opt_SCFEnergies):
-            if min_energy - energy > energy_tol:
-                min_energy = energy
-                min_idx = i
+        # for i, energy in enumerate(opt_SCFEnergies):
+        #     if min_energy - energy > energy_tol:
+        #         min_energy = energy
+        #         min_idx = i
 
-        if min_idx != 0:
-            logging.info("We found a lower energy conformer during rotor scan")
-            first_is_lowest = False
+        # if min_idx != 0:
+        #     logging.info("We found a lower energy conformer during rotor scan")
+        #     first_is_lowest = False
 
-        min_opt_idx = opt_indices[min_idx]
+        # min_opt_idx = opt_indices[min_idx]
 
-        atomnos = parser.atomnos
-        atomcoords = parser.atomcoords[min_opt_idx]
+        # atomnos = parser.atomnos
+        # atomcoords = parser.atomcoords[min_opt_idx]
 
-        return [first_is_lowest, min_energy, atomnos, atomcoords]
+        # return [first_is_lowest, min_energy, atomnos, atomcoords]
 
 ################## rotor methods #############################################
 
@@ -1126,7 +1127,7 @@ class ThermoJob():
                 logging.info(
                     "Submitting conformer calculation for {}".format(calc.label))
                 label = self._submit_conformer(ref_conformer, calc)
-                time.sleep(60)
+                time.sleep(15)
                 while not check_complete(label=label, user=self.discovery_username):
                     time.sleep(120)
 
@@ -1326,7 +1327,7 @@ class ThermoJob():
                 label = self._submit_conformer(conformer,calc)
                 time.sleep(15)
                 while not check_complete(label=label,user=self.discovery_username):
-                    time.sleep(120)
+                    time.sleep(60)
 
         if options['rotors']:
 
@@ -1447,9 +1448,14 @@ class ThermoJob():
                 arkane_supporting = os.path.join(arkane_dir,'supporting_information.csv')
 
                 arkane_log_lines = open(os.path.join(arkane_dir,'arkane.log'),'r').readlines()
+                energy_differences = []
                 for line in arkane_log_lines:
                     if "different in energy from the lowest energy conformer" in line:
                         logging.warning(line)
+                        energy_differences.append(float(line.split('kJ')[0].split()[-1]))
+                
+                if len(energy_differences) > 0:
+                    if max(energy_differences) > 2.0:
                         assert False
 
                 if options['dir_path']:

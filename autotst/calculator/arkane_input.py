@@ -147,7 +147,7 @@ class Arkane_Input():
 
         return path
 
-    def write_arkane_input(self, frequency_scale_factor=1.0, useIsodesmicReactions=False, useAtomCorrections=False, useBondCorrections=False,
+    def write_arkane_input(self, frequency_scale_factor=None, useIsodesmicReactions=False, useAtomCorrections=False, useBondCorrections=False,
                             useHinderedRotors=False, constraint_classes=None, n_reactions_max = 50, 
                             max_ref_uncertainty = None, deviation_coeff = 3.0):
         
@@ -163,7 +163,8 @@ class Arkane_Input():
 
         with open(arkane_input_path,'w+') as f:
             f.write('modelChemistry = "{}"\n'.format(self.modelChemistry))
-            f.write('frequencyScaleFactor = {}\n'.format(frequency_scale_factor))
+            if frequency_scale_factor:
+                f.write('frequencyScaleFactor = {}\n'.format(frequency_scale_factor))
             f.write('useAtomCorrections = {}\n'.format(useAtomCorrections))
             f.write('useBondCorrections = {}\n'.format(useBondCorrections))
             f.write('useHinderedRotors = {}\n'.format(useHinderedRotors))
