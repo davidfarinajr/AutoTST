@@ -166,6 +166,7 @@ class ThermoJob():
             os.makedirs(self.directory)
 
         self.rmg_mol = None
+        self.torsion_conformer = None
 
     def __repr__(self):
         return "< ThermoJob '{}'>".format(self.species)
@@ -333,7 +334,7 @@ class ThermoJob():
 
         raise Exception("Shoudn't reach here")
 
-    def calculate_sp(self,conformer,sp_method):
+    def calculate_sp(self,conformer,sp_method,restart=False):
         
         method_name = self.method_name
         self.calculator.conformer = conformer
@@ -351,7 +352,7 @@ class ThermoJob():
         log_path = os.path.join(calc.scratch,calc.label + ".log")
         logging.info(
             "Submitting {} calculation".format(calc.label))
-        label = self._submit_conformer(conformer,calc)
+        label = self._submit_conformer(conformer,calc,restart)
         time.sleep(60)
         while not check_complete(label=label,user=self.discovery_username):
             time.sleep(120)
@@ -359,7 +360,7 @@ class ThermoJob():
         complete, converged = self.calculator.verify_output_file(log_path)
 
         if (complete and converged):
-            return True
+            return check_isomorphic(conformer=conformer,log_path=log_path)
 
         if not complete: # try again
             logging.info(
@@ -376,7 +377,7 @@ class ThermoJob():
             
             if (complete and converged):
                 logging.info("{} completed!".format(label))
-                return True
+                return check_isomorphic(conformer=conformer,log_path=log_path)
             elif not complete:
                 logging.info(
                     "It appears that {} was killed prematurely or never completed :(".format(calc.label))
@@ -417,7 +418,7 @@ class ThermoJob():
             
             if (complete and converged):
                 logging.info("{} completed!".format(label))
-                return True
+                return check_isomorphic(conformer=conformer,log_path=log_path)
             
             elif not complete:
                 logging.info(
@@ -434,7 +435,7 @@ class ThermoJob():
             
                 if (complete and converged):
                     logging.info("{} completed!".format(label))
-                    return True
+                    return check_isomorphic(conformer=conformer,log_path=log_path)
                 elif not complete:
                     logging.info(
                         "It appears that {} was killed prematurely or never completed :(".format(calc.label))
@@ -527,71 +528,13 @@ class ThermoJob():
             return False
 
 ################## rotor methods #############################################
-    def submit_rotor(self, conformer, torsion_index, restart=False):
+    def calculate_rotors(self, conformer, steps=36, step_size=10.0, attempts=0):
 
-        """
-        A methods to submit a job based on the conformer and the index of the torsion
-        """
-        assert conformer, "Please provide a conformer to submit a job"
-        self.calculator.conformer = conformer
-        ase_calculator = self.calculator.get_rotor_calc(torsion_index)
-
-        copy_molecule = conformer.rmg_molecule.copy()
-        copy_molecule.delete_hydrogens()
-        number_of_atoms = len(copy_molecule.atoms)
-        if number_of_atoms >= 4:
-            nproc = 2
-        elif number_of_atoms >= 7:
-            nproc = 4
-        elif number_of_atoms >= 9:
-            nproc = 6
-        else:
-            nproc = 8
-
-        self.write_input(conformer, ase_calculator)
-        label = ase_calculator.label
-        file_path = os.path.join(ase_calculator.scratch, ase_calculator.label)
-
-        os.environ["COMMAND"] = "g16"  # only using gaussian for now
-        os.environ["FILE_PATH"] = label
-
-        attempted = False
-        if os.path.exists(log_path):
-            attempted = True
-            if not restart:
-                logging.info(
-                    "It appears that this job has already been run, not running it a second time.")
-
-        if not check_complete(label=label, user=self.discovery_username):
-            logging.info("It appears that {} is already in the queue...not submitting".format(label))
-            return label
-
-        if restart or not attempted:
-            if restart:
-                logging.info(
-                    "Restarting calculations for {}.".format(conformer)
-                )
-            else:
-                logging.info("Starting calculations for {}".format(conformer))
-
-            output = subprocess.check_output(
-                """sbatch --exclude=c5003 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p {1} -N 1 -n {2} -t {3} --mem={4} $AUTOTST/autotst/job/submit.sh""".format(
-                    label,calc.parameters["partition"],calc.parameters["nprocshared"],calc.parameters["time"],calc.parameters["mem"]), shell=True, cwd=calc.scratch, stderr=STDOUT
-                    ).decode("utf-8")  
-            
-            if 'Job violates accounting/QOS policy' in output:
-                number_of_jobs =  self.get_jobs_in_queue(self.discovery_username)
-                time.sleep(300)
-                jobs = self.get_jobs_in_queue(self.discovery_username)
-                while jobs >= number_of_jobs:
-                    time.sleep(300)
-                    jobs = self.get_jobs_in_queue(self.discovery_username)
-                self._submit_conformer(conformer, calc, restart)
-
-        return label
-
-    def calculate_rotors(self, conformer, steps=36, step_size=10.0):
-
+        restart = False
+        if attempts > 5:
+            assert False
+        if attempts > 0:
+            restart = True
         complete = {}
         calculators = {}
         verified = {}
@@ -603,10 +546,11 @@ class ThermoJob():
             ase_calculator = self.calculator.get_rotor_calc(
                 torsion.index)
             label = self._submit_conformer(
-                conformer, ase_calculator)
+                conformer, ase_calculator, restart)
             logging.info(label)
             complete[label] = False
             verified[label] = False
+            time.sleep(10)
 
         done = False
         lowest_energy_label = None
@@ -615,11 +559,12 @@ class ThermoJob():
         while not done:
             for label in list(complete.keys()):
                 if not check_complete(label,self.discovery_username):
+                    time.sleep(60)
                     continue
                 if done:
                     continue
                 complete[label] = True
-                lowest_conf, continuous = self.verify_rotor(
+                lowest_conf, continuous, atoms = self.verify_rotor(
                     conformer, label)
                 if all([lowest_conf, continuous]):
                     verified[label] = True
@@ -628,7 +573,6 @@ class ThermoJob():
 
                 if not lowest_conf:
                     done = True
-                    lowest_energy_label = label
                     conformer_error = True
                     continue
                 elif all(complete.values()):
@@ -636,71 +580,112 @@ class ThermoJob():
 
         if conformer_error:
             logging.info(
-                "A lower energy conformer was found... Going to optimize this insted")
+                "A lower energy conformer was found... Going to optimize this instead")
+            # assert False
             for label in list(complete.keys()):
                 subprocess.call(
                     """scancel -n '{}'""".format(label), shell=True)
-            if isinstance(conformer, TS):
-                t = "ts"
-                label = conformer.reaction_label
-                file_name = os.path.join(
-                    self.directory, t, label, "rotors", lowest_energy_label + ".log")
-                t = "ts"
-                direction = conformer.direction
-            else:
-                t = "species"
-                label = conformer.smiles
-                file_name = os.path.join(
-                    self.directory, t, self.method_name, label,"rotors", lowest_energy_label + ".log")
+            # shutil.rmtree(self.directory,"species",self.method_name, conformer.smiles,"rotors")
+            # if isinstance(conformer, TS):
+            #     t = "ts"
+            #     label = conformer.reaction_label
+            #     file_name = os.path.join(
+            #         self.directory, t, label, "rotors", lowest_energy_label + ".log")
+            #     t = "ts"
+            #     direction = conformer.direction
+            # else:
+            #     t = "species"
+            #     label = conformer.smiles
+            #     file_name = os.path.join(
+            #         self.directory, t, self.method_name, label,"rotors", lowest_energy_label + ".log")
 
-                direction = None
+            #     direction = None
 
-            atoms = self.read_log(file_name)
             conformer._ase_molecule = atoms
             conformer.update_coords_from("ase")
-            for index in ["X", "Y", "Z"]:
-                # we do this because we now have a new conformer
-                # the index starts at X and if another lower energy conformer arrises, we go to Y and so on
-                if index != conformer.index:
-                    logging.info(
-                        "Setting index of {} to {}...".format(conformer, index))
-                    conformer.index = index
-                    break
+            # for index in ["X", "Y", "Z"]:
+            #     # we do this because we now have a new conformer
+            #     # the index starts at X and if another lower energy conformer arrises, we go to Y and so on
+            #     if index != conformer.index:
+            #         logging.info(
+            #             "Setting index of {} to {}...".format(conformer, index))
+            #         conformer.index = index
+            #         break
 
-            label = self.submit_conformer(conformer)
-
-            while not check_complete(label,self.discovery_username):
+            # if self.calculator.settings["sp"] == 'G4':
+            #     self.calculator.settings["method"] = "B3LYP"
+            #     self.calculator.settings["basis"] = "6-31G(2df,p)"
+            #     self.calculator.settings["dispersion"] = None
+            
+            if not self.calculate_sp(conformer,'G4',True):
+                assert False
+            
+            sp_dir = os.path.join(self.directory,"species",self.method_name,conformer.smiles,"sp")
+            label = smiles + '_' + 'G4'
+            log_path = os.path.join(sp_dir,label + '.log')
+            complete, converged = self.calculator.verify_output_file(log_path)
+            if not all([complete,converged]):
+                logging.info("It seems the log file {} is incomplete or didnt converge".format(log_path))
+            # conformer = Conformer(smiles=self.rmg_mol.smiles)
+            # conformer.smiles = smiles
+            assert check_isomorphic(conformer,log_path)
+            # conformer.rmg_molecule = self.rmg_mol
+            atoms = read_log(log_path)
+            mult = ccread(log_path, loglevel=logging.ERROR).mult
+            conformer._ase_molecule = atoms
+            conformer.update_coords_from("ase")
+            conformer.rmg_molecule.multiplicity = mult
+            self.calculator.conformer = conformer
+            self.calculator.settings["method"] = "B3LYP"
+            self.calculator.settings["basis"] = "6-31G(2df,p)"
+            self.calculator.settings["dispersion"] = None
+            calc = self.calculator.get_freq_calc()
+            label = self._submit_conformer(conformer,calc,restart=True)
+            time.sleep(15)
+            while not check_complete(label=label,user=self.discovery_username):
                 time.sleep(120)
 
             logging.info(
                 "Reoptimization complete... performing hindered rotors scans again")
 
-            if direction:
-                file_name = "{}_{}_{}.log".format(
-                    label, direction, conformer.index)
-            else:
-                file_name = "{}_{}.log".format(label, conformer.index)
+            self.torsion_conformer = conformer.copy()
+            self.calculator.conformer = conformer
+            attempts += 1
+            # if direction:
+            #     file_name = "{}_{}_{}.log".format(
+            #         label, direction, conformer.index)
+            # else:
+            #     file_name = "{}_{}.log".format(label, conformer.index)
 
-            file_path = os.path.join(
-                self.directory, t, self.method_name, label, "conformers", file_name
-            )
-            complete, converged = self.calculator.verify_output_file(file_path)
-            if not converged:
-                logging.info(
-                    "The new geometry was unable to converge... Hindered rotor calculations failed... :(")
-                for key in verified.keys():
-                    verified[key] = False
-                return verified
-            logging.info(
-                "The new geometry was able to successfully converge. Reattempting hindered rotor calculations")
-            shutil.copyfile(
-                file_path,
-                os.path.join(self.directory, t, self.method_name, label, "{}.log".format(label))
-            )
-            conformer._ase_molecule = self.read_log(file_path)
-            conformer.update_coords_from("ase")
+     
+            # log = os.path.join(self.directory,"species",method_name,conformer.smiles,"conformers",label+"_optfreq.log")
+            # assert os.path.exists(log), "It appears the calculation failed for {}...cannot perform single point calculations".format(conformer.smiles)
+            # complete, converged = self.calculator.verify_output_file(log)
+            # assert all([complete, converged]), "It appears the log file in incomplete or did not converge"
+            # atoms = read_log(log)
+            # mult = ccread(log,loglevel=logging.ERROR).mult
+            # conformer._ase_molecule = atoms
+            # conformer.update_coords_from("ase")
+            # conformer.rmg_molecule.multiplicity = mult
 
-            return self.calculate_rotors(conformer, steps, step_size)
+            # if not converged:
+            #     logging.info(
+            #         "The new geometry was unable to converge... Hindered rotor calculations failed... :(")
+            #     for key in verified.keys():
+            #         verified[key] = False
+            #     return verified
+
+            # logging.info(
+            #     "The new geometry was able to successfully converge. Reattempting hindered rotor and G4 calculations")
+            # if not self.calculate_sp(conformer,'G4',True)
+            #     logging.warning("It seems the G4 calc failed")
+            #     assert False
+            # shutil.copyfile(
+            #     log,
+            #     os.path.join(self.directory, "species", self.method_name, conformer.smiles, label+"_optfreq.log")
+            # )
+
+            return self.calculate_rotors(conformer, steps, step_size, attempts)
 
         else:
             for label, boolean in list(verified.items()):
@@ -734,19 +719,22 @@ class ThermoJob():
         elif isinstance(conformer, Conformer):
              file_name = os.path.join(
                  self.directory, "species", self.method_name,conformer.smiles, "rotors", label + ".log")
+        
         parser = cclib.io.ccread(file_name, loglevel=logging.ERROR)
 
         continuous = self.check_rotor_continuous(
             steps, step_size, parser=parser)
         if continuous is True:
             logging.info("Rotor scan {} is continuous".format(label))
-        [lowest_conf, energy, atomnos,
-            atomcoords] = self.check_rotor_lowest_conf(parser=parser)
+
+        lowest_conf,atoms = self.check_rotor_lowest_conf(parser=parser)
+        # [lowest_conf, energy, atomnos,
+        #     atomcoords] = self.check_rotor_lowest_conf(parser=parser)
         #opt_count_check = self.check_rotor_opts(steps, parser=parser)
         #good_slope = self.check_rotor_slope(steps, step_size, parser=parser)
 
         # , good_slope, opt_count_check] ### Previously used, but the second two checks were deemed unecessary
-        return [lowest_conf, continuous]
+        return (lowest_conf, continuous, atoms)
 
     def check_rotor_opts(self, steps, parser):
 
@@ -762,7 +750,7 @@ class ThermoJob():
     def check_rotor_slope(self, steps, step_size, parser, tol=0.1):
 
         opt_indices = [i for i, status in enumerate(
-            parser.optstatus) if status in [2, 4]]
+            parser.optstatus) if status in [2, 4, 5]]
         opt_SCFEnergies = [parser.scfenergies[index] for index in opt_indices]
 
         max_energy = max(opt_SCFEnergies)
@@ -790,7 +778,7 @@ class ThermoJob():
         assert isinstance(step_size, float)
 
         opt_indices = [i for i, status in enumerate(
-            parser.optstatus) if status in [2, 4]]
+            parser.optstatus) if status in [2, 4, 5]]
         opt_SCFEnergies = [parser.scfenergies[index] for index in opt_indices]
 
         max_energy = max(opt_SCFEnergies)
@@ -824,11 +812,60 @@ class ThermoJob():
 
     def check_rotor_lowest_conf(self, parser, tol=0.1):
 
+        symbol_dict = {
+            53: "I",
+            35: "Br",
+            17: "Cl",
+            9:  "F",
+            8:  "O",
+            7:  "N",
+            6:  "C",
+            1:  "H",
+            }
+
+        energy_index_dict = {parser.scfenergies[i]:i for i,status in enumerate(parser.optstatus) if
+                            status in (2,4,5)}
+
+        starting_energy, final_energy = (list(energy_index_dict.keys())[0],list(energy_index_dict.keys())[-1])
+        minimum_energy = min(energy_index_dict)
+
+        if abs(starting_energy - final_energy) > tol:
+            logging.info("Rotor scan failed since starting energy is not within tolerance of final energy")
+            assert False
+
+        if abs(minimum_energy - min(starting_energy, final_energy)) > tol:
+            logging.info("A lower energy conformer was found during rotor scan")
+            min_energy_index = energy_index_dict[minimum_energy]
+            atomnos = parser.atomnos
+            atomcoords = parser.atomcoords[min_energy_index]
+            atoms = []
+            for atom_num, coords in zip(atomnos, atomcoords):
+                atoms.append(Atom(symbol=symbol_dict[atom_num], position=coords))
+            atoms = Atoms(atoms)
+            # atoms = read_log(file_name)
+            conformer._ase_molecule = atoms
+            conformer.update_coords_from("ase")
+            starting_molecule = RMGMolecule(smiles=conformer.smiles)
+            starting_molecule = starting_molecule.to_single_bonds()
+            test_molecule = RMGMolecule()
+            test_molecule.from_xyz(
+                atoms.arrays["numbers"],
+                atoms.arrays["positions"]
+                )
+            if not starting_molecule.is_isomorphic(test_molecule):
+                logging.info(
+                    "Output geometry of {} is not isomorphic with input geometry".format(log_path))
+                assert False
+            return (False, atoms)
+
+        return (True, None)
+
+
         opt_indices = [i for i, status in enumerate(
-            parser.optstatus) if status in [2, 4]]
+            parser.optstatus) if status in (2,4,5)]
         opt_SCFEnergies = [parser.scfenergies[index] for index in opt_indices]
 
-        max_energy = max(opt_SCFEnergies)
+        max_energy,min_energy = (max(opt_SCFEnergies),min(opt_SCFEnergies))
         min_energy = min(opt_SCFEnergies)
         energy_tol = tol*(max_energy - min_energy)
 
@@ -842,6 +879,7 @@ class ThermoJob():
                 min_idx = i
 
         if min_idx != 0:
+            logging.info("We found a lower energy conformer during rotor scan")
             first_is_lowest = False
 
         min_opt_idx = opt_indices[min_idx]
@@ -883,7 +921,6 @@ class ThermoJob():
         basis_set = self.calculator.settings['basis'].upper()
         method_name = self.method_name
         smiles = self.species.smiles[0]
-        self.torsion_conformer = None
 
         if options["dir_path"]:
             dest2 = os.path.join(options["dir_path"],self.method_name)
@@ -952,6 +989,7 @@ class ThermoJob():
                 for name, process in list(processes.items()):
                     process.start()
                     currently_running.append(name)
+                    time.sleep(5)
 
                 while len(currently_running) > 0:
                     for name, process in list(processes.items()):
@@ -1264,6 +1302,31 @@ class ThermoJob():
                     if not process.is_alive():
                         currently_running.remove(name)
                 time.sleep(15)
+        
+            if 'G4' in single_point_methods:
+                label = smiles + '_' + 'G4'
+                log_path = os.path.join(sp_dir,label + '.log')
+                complete, converged = self.calculator.verify_output_file(log_path)
+                if not all([complete,converged]):
+                    logging.info("It seems the log file {} is incomplete or didnt converge".format(log_path))
+                conformer = Conformer(smiles=self.rmg_mol.smiles)
+                conformer.smiles = smiles
+                assert check_isomorphic(conformer,log_path)
+                conformer.rmg_molecule = self.rmg_mol
+                atoms = read_log(log_path)
+                mult = ccread(log_path, loglevel=logging.ERROR).mult
+                conformer._ase_molecule = atoms
+                conformer.update_coords_from("ase")
+                conformer.rmg_molecule.multiplicity = mult
+                self.calculator.conformer = conformer
+                self.calculator.settings["method"] = "B3LYP"
+                self.calculator.settings["basis"] = "6-31G(2df,p)"
+                self.calculator.settings["dispersion"] = None
+                calc = self.calculator.get_freq_calc()
+                label = self._submit_conformer(conformer,calc)
+                time.sleep(15)
+                while not check_complete(label=label,user=self.discovery_username):
+                    time.sleep(120)
 
         if options['rotors']:
 
@@ -1303,7 +1366,7 @@ class ThermoJob():
             method_name,
             smiles,
             "sp",
-            'arkane_rotors'
+            'ARKANE_NEW_G40'
             )
 
             if not os.path.exists(arkane_dir):
@@ -1312,8 +1375,10 @@ class ThermoJob():
             for sp_method in single_point_methods:
                 
                 label = smiles + '_' + sp_method
+                freq_label = smiles + '_' + 'B3LYP' + '_freq' 
                 sp_dir = os.path.join(self.directory,"species",method_name,smiles,"sp")
                 log_path = os.path.join(sp_dir,label + '.log')
+                freq_path = os.path.join(sp_dir,freq_label + '.log')
 
                 if self.torsion_conformer is not None:
                     conf = self.torsion_conformer
@@ -1333,20 +1398,22 @@ class ThermoJob():
                 
                 copyfile(log_path,
                 os.path.join(arkane_dir,label+'.log'))
+                copyfile(freq_path,
+                os.path.join(arkane_dir,freq_label+'.log'))
                 model_chem = sp_method
-                if options['rotors'] is True:
+                if options['rotors'] is True and len(conf.torsions) > 0:
                     if not os.path.exists(os.path.join(arkane_dir,'rotors')):
                         copytree(os.path.join(
                         self.directory, 'species', self.method_name, smiles, 'rotors'), os.path.join(arkane_dir,'rotors'))
                     arkane_calc = Arkane_Input(conformer=conf,modelChemistry=model_chem,directory=arkane_dir,
-                gaussian_log_path=log_path, rotors_dir=os.path.join(arkane_dir,'rotors'))
-                    arkane_calc.write_arkane_input(frequency_scale_factor=0.9854,useAtomCorrections=options["use_atom_corrections"],
+                energy_log_path=log_path, geometry_log_path=freq_path, frequencies_log_path=freq_path, rotors_dir=os.path.join(arkane_dir,'rotors'))
+                    arkane_calc.write_arkane_input(useAtomCorrections=options["use_atom_corrections"],
                                                    useBondCorrections=options["use_bond_corrections"], useIsodesmicReactions=options["use_isodesmic_reactions"],
                                                    useHinderedRotors=True)
                 else:
                     arkane_calc = Arkane_Input(conformer=conf, modelChemistry=model_chem, directory=arkane_dir,
-                                               gaussian_log_path=log_path)
-                    arkane_calc.write_arkane_input(frequency_scale_factor=0.9854,useAtomCorrections=options["use_atom_corrections"],
+                                               energy_log_path=log_path, geometry_log_path=freq_path, frequencies_log_path=freq_path,)
+                    arkane_calc.write_arkane_input(useAtomCorrections=options["use_atom_corrections"],
                                                    useBondCorrections=options["use_bond_corrections"], useIsodesmicReactions=options["use_isodesmic_reactions"]
                                                     )
 
@@ -1362,21 +1429,28 @@ class ThermoJob():
                 
                 yml_file = os.path.join(arkane_dir,'species','1.yml')
                 
-                if os.path.exists(yml_file):
-                    logging.info("It appears the arkane job has already been run")
-                else:
-                    logging.info("starting arkane calc for {}".format(label))
-                    subprocess.Popen(
-                        """python $RMGpy/Arkane.py arkane_input.py""", 
-                        shell=True, cwd=arkane_calc.directory)
-                    while not os.path.exists(yml_file):
-                        time.sleep(60)
-                time.sleep(10)
+                # if os.path.exists(yml_file):
+                #     logging.info("It appears the arkane job has already been run...not running again")
+                # else:
+
+                logging.info("starting arkane calc for {}".format(label))
+                subprocess.run(
+                    """python $RMGpy/Arkane.py arkane_input.py""", 
+                    shell=True, cwd=arkane_calc.directory)
+                # while not os.path.exists(yml_file):
+                #     time.sleep(10)
+                time.sleep(5)
                 os.remove(os.path.join(arkane_dir,label + ".log"))
                 if os.path.exists(os.path.join(arkane_dir,'rotors')):
-                    shutil.rmtree(os.path.join(arkane_dir,'rotors'))
+                    rmtree(os.path.join(arkane_dir,'rotors'))
                 arkane_out = os.path.join(arkane_dir,'output.py')
                 arkane_supporting = os.path.join(arkane_dir,'supporting_information.csv')
+
+                arkane_log_lines = open(os.path.join(arkane_dir,'arkane.log'),'r').readlines()
+                for line in arkane_log_lines:
+                    if "different in energy from the lowest energy conformer" in line:
+                        logging.warning(line)
+                        assert False
 
                 if options['dir_path']:
                     dest = os.path.join(options['dir_path'],sp_method)

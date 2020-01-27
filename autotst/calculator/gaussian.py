@@ -477,7 +477,7 @@ class Gaussian():
         del ase_gaussian.parameters['force']
         return ase_gaussian
 
-    def get_conformer_calc(self):
+    def get_conformer_calc(self, opt=True, freq=True):
         """
         A method that creates a calculator for a `Conformer` that will perform a geometry optimization
 
@@ -501,11 +501,11 @@ class Gaussian():
 
         convergence = self.settings["convergence"].upper()
 
-        self.settings["mem"] = '10GB'
         num_atoms = self.conformer.rmg_molecule.get_num_atoms()
         
         if num_atoms <= 4:
             self.settings["nprocshared"] = 1
+            self.settings["mem"] = '10GB'
             self.settings["time"] = '12:00:00'
         elif num_atoms <= 8:
             self.settings["mem"] = '15GB'
@@ -534,14 +534,115 @@ class Gaussian():
 
         #self.conformer.rmg_molecule.update_multiplicity()
 
-        label = "{}_{}_{}_optfreq".format(self.conformer.smiles, self.conformer.index, self.opt_method)
+        label = "{}_{}_{}".format(self.conformer.smiles, self.conformer.index, self.opt_method)
 
+        if all([opt, freq]):
+            label += '_optfreq'
+        elif opt is True:
+            label += '_opt'
+        elif freq is True:
+            label += '_freq'
+        
         new_scratch = os.path.join(
             self.directory,
             "species",
             self.opt_method,
             self.conformer.smiles,
             "conformers"
+        )
+
+        try:
+            os.makedirs(new_scratch)
+        except OSError:
+            pass
+
+        extra = "{} IOP(7/33=1,2/16=3) scf=(maxcycle=900)".format(dispersion)
+
+        if opt is True:
+            extra += " opt=(calcfc,maxcycles=900,{})".format(convergence)
+        if freq is True:
+            extra += " freq"
+
+        ase_gaussian = ASEGaussian(
+            mem=self.settings["mem"],
+            nprocshared=self.settings["nprocshared"],
+            label=label,
+            scratch=new_scratch,
+            method=method,
+            basis=basis,
+            extra=extra,
+            multiplicity=self.conformer.rmg_molecule.multiplicity)
+        ase_gaussian.atoms = self.conformer.ase_molecule
+        ase_gaussian.directory = new_scratch
+        ase_gaussian.label = label
+        ase_gaussian.parameters["partition"] = self.settings["partition"]
+        ase_gaussian.parameters["time"] = self.settings["time"]
+        del ase_gaussian.parameters['force']
+        return ase_gaussian
+
+    def get_freq_calc(self):
+        """
+        A method that creates a calculator for a `Conformer` that will perform a geometry optimization
+
+        Parameters:
+        - conformer (Conformer): A `Conformer` object that you want to perform hindered rotor calculations on
+        - torsion (Torsion): A `Torsion` object that you want to perform hindered rotor calculations about
+        - settings (dict): a dictionary of settings containing method, basis, mem, nprocshared
+        - scratch (str): a directory where you want log files to be written to
+        - convergence (str): ['verytight','tight','' (default)], specifies the convergence criteria of the geometry optimization
+
+        Returns:
+        - calc (ASEGaussian): an ASEGaussian calculator with all of the proper setting specified
+        """
+
+        method = self.settings["method"].upper()
+        basis = self.settings["basis"].upper()
+        if self.settings["dispersion"]:
+            dispersion = 'EmpiricalDispersion={}'.format(self.settings["dispersion"].upper())
+        else: 
+            dispersion = ''
+
+        self.settings["mem"] = '10GB'
+        num_atoms = self.conformer.rmg_molecule.get_num_atoms()
+        
+        if num_atoms <= 4:
+            self.settings["nprocshared"] = 1
+            self.settings["time"] = '12:00:00'
+        elif num_atoms <= 8:
+            self.settings["mem"] = '15GB'
+            self.settings["nprocshared"] = 2
+            self.settings["time"] = '12:00:00'
+        elif num_atoms <= 15:
+            self.settings["mem"] = '20GB'
+            self.settings["nprocshared"] = 4
+            self.settings["time"] = '12:00:00'
+        elif num_atoms <= 20:
+            self.settings["mem"] = '30GB'
+            self.settings["nprocshared"] = 4
+            self.settings["time"] = '12:00:00'
+        else:
+            self.settings["mem"] = '40GB'
+            self.settings["nprocshared"] = 6
+            self.settings["time"] = '12:00:00'
+
+        if isinstance(self.conformer, TS):
+            logging.info(
+                "TS object provided, cannot obtain a species calculator for a TS")
+            return None
+
+        assert isinstance(
+            self.conformer, Conformer), "A Conformer object was not provided..."
+
+        #self.conformer.rmg_molecule.update_multiplicity()
+
+        label = "{}_{}_freq".format(self.conformer.smiles, method)
+
+        new_scratch = os.path.join(
+            self.directory,
+            "species",
+            self.opt_method,
+            self.conformer.smiles,
+            "sp"
         )
 
         try:
@@ -556,7 +657,7 @@ class Gaussian():
             scratch=new_scratch,
             method=method,
             basis=basis,
-            extra="opt=(calcfc,maxcycles=900,{}) {} freq IOP(7/33=1,2/16=3) scf=(maxcycle=900)".format(convergence,dispersion),
+            extra="{} freq IOP(7/33=1,2/16=3) scf=(maxcycle=900)".format(dispersion),
             multiplicity=self.conformer.rmg_molecule.multiplicity)
         ase_gaussian.atoms = self.conformer.ase_molecule
         ase_gaussian.directory = new_scratch
