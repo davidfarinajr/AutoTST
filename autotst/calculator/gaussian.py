@@ -739,8 +739,8 @@ class Gaussian():
         num_atoms = self.conformer.rmg_molecule.get_num_atoms()
         
         if num_atoms <= 18:
-            self.settings["mem"] = '100GB'
-            self.settings["nprocshared"] = 16
+            self.settings["mem"] = '80GB'
+            self.settings["nprocshared"] = 8
         else:
             self.settings["mem"] = '300GB'
             self.settings["nprocshared"] = 16

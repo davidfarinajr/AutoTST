@@ -367,7 +367,7 @@ class ThermoJob():
                 "It appears that {} was killed prematurely".format(calc.label))
             calc.parameters["time"] = "24:00:00"
             calc.parameters["nprocshared"] = 16
-            calc.parameters["mem"] = "300Gb"
+            calc.parameters["mem"] = "100Gb"
             label = self._submit_conformer(conformer,calc, restart=True)
             time.sleep(15)
             while not check_complete(label=label,user=self.discovery_username):
