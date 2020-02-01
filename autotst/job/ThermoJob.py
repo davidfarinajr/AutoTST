@@ -107,6 +107,7 @@ class ThermoJob():
             self,
             species=None,
             calculator=None,
+            allocation_id = 'TG-CTS190043',
             conformer_calculator = None, # an ASE Calculator object
             partition="general", # The partition to run calculations on
             discovery_username= None, # discovery user account (for checking on jobs in the queue)
@@ -155,6 +156,7 @@ class ThermoJob():
             self.conformer_calculator.directory = self.scratch
             
         self.partition = partition
+        self.allocation_id = allocation_id
 
         manager = multiprocessing.Manager()
         global results
@@ -205,8 +207,8 @@ class ThermoJob():
                 logging.info("Starting calculations for {}".format(conformer))
             try:
                 output = subprocess.check_output(
-                    """sbatch --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p {1} -N 1 -n {2} -t {3} --mem={4} $AUTOTST/autotst/job/submit.sh""".format(
-                        label,calc.parameters["partition"],calc.parameters["nprocshared"],calc.parameters["time"],calc.parameters["mem"]), shell=True, cwd=calc.scratch, stderr=STDOUT
+                    """sbatch --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p {1} -N 1 -n {2} -t {3} --mem={4} -A {5} $AUTOTST/autotst/job/submit.sh""".format(
+                        label,calc.parameters["partition"],calc.parameters["nprocshared"],calc.parameters["time"],calc.parameters["mem"],self.allocation_id), shell=True, cwd=calc.scratch, stderr=STDOUT
                         ).decode("utf-8") 
                 logging.info("Starting calculations for {}".format(conformer))
             except TimeoutExpired as e:
