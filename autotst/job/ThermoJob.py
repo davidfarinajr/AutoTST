@@ -180,10 +180,7 @@ class ThermoJob():
         write_input(conformer, calc)
         label = calc.label
         log_path = os.path.join(calc.scratch,label + '.log')
-        gaussian_scratch = '/scratch/westgroup/GAUSS_SCRDIR/'
-        os.environ['GAUSS_SCRDIR'] = gaussian_scratch
-        if not os.path.exists(gaussian_scratch):
-            os.makedirs(gaussian_scratch)
+
 
         os.environ["COMMAND"] = self.calculator.command  # only using gaussian for now
         os.environ["FILE_PATH"] = label
@@ -208,7 +205,7 @@ class ThermoJob():
                 logging.info("Starting calculations for {}".format(conformer))
             try:
                 output = subprocess.check_output(
-                    """sbatch --exclude=c5003 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p {1} -N 1 -n {2} -t {3} --mem={4} $AUTOTST/autotst/job/submit.sh""".format(
+                    """sbatch --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p {1} -N 1 -n {2} -t {3} --mem={4} $AUTOTST/autotst/job/submit.sh""".format(
                         label,calc.parameters["partition"],calc.parameters["nprocshared"],calc.parameters["time"],calc.parameters["mem"]), shell=True, cwd=calc.scratch, stderr=STDOUT
                         ).decode("utf-8") 
                 logging.info("Starting calculations for {}".format(conformer))
@@ -504,7 +501,7 @@ class ThermoJob():
             logging.info(
                 "Starting FOD calculation for {}".format(conformer))
             subprocess.Popen(
-                """sbatch --exclude=c5003,c3040 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p test,general -N 1 -n 4 -t 10:00 --mem=5GB $AUTOTST/autotst/job/orca_submit.sh""".format(
+                """sbatch --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p test,general -N 1 -n 4 -t 10:00 --mem=5GB $AUTOTST/autotst/job/orca_submit.sh""".format(
                     label), shell=True, cwd=orca_calc.directory)
             time.sleep(60)
         # wait unitl the job is done
