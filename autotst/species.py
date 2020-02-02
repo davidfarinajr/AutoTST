@@ -194,20 +194,21 @@ class Species():
                             ):
 
         from autotst.conformer.systematic import systematic_search, find_all_combos
-
-        for smiles, conformers in self.conformers.items():
-            conformer = conformers[0]
-            conformer.ase_molecule.set_calculator(ase_calculator)
-            conformers = systematic_search(conformer,
-                                            delta = delta,
-                                            multiplicity=multiplicity,
-                                            rmsd_cutoff =rmsd_cutoff,
-                                            max_conformers=max_conformers,
-                                            energy_cutoff = energy_cutoff
-                                            )
-            self.conformers[smiles] = conformers
+        #for smiles, conformers in self.conformers.items():
+        #    conformer = conformers[0]
+        conformer = self.conformers[self.smiles[0]][0]
+        conformer.ase_molecule.set_calculator(ase_calculator)
+        conformers = systematic_search(conformer,
+                                       delta=delta,
+                                       multiplicity=multiplicity,
+                                       rmsd_cutoff=rmsd_cutoff,
+                                       max_conformers=max_conformers,
+                                       energy_cutoff=energy_cutoff
+                                       )
+        self.conformers[self.smiles[0]] = conformers
 
         return self.conformers
+
 
 
 class Conformer():
