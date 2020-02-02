@@ -189,6 +189,7 @@ def systematic_search(conformer,
                 directory = 'conformer_logs'
             calculator.label = "{}_{}".format(conformer.smiles, i)
             calculator.directory = os.path.join(directory, label,'{}_{}'.format(conformer.smiles, i))
+            logging.info(calculator.directory)
             if not os.path.exists(calculator.directory):
                 try:
                     os.makedirs(calculator.directory)
