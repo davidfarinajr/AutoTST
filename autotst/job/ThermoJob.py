@@ -989,7 +989,7 @@ class ThermoJob():
                 for name, process in list(processes.items()):
                     process.start()
                     currently_running.append(name)
-                    time.sleep(5)
+                    time.sleep(1)
 
                 while len(currently_running) > 0:
                     for name, process in list(processes.items()):
