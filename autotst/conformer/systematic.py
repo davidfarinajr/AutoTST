@@ -247,7 +247,7 @@ def systematic_search(conformer,
                 if rmsd <= rmsd_cutoff:
                     return True
         if str(i) != 'ref':
-            return_dict[i] = conformer.ase_molecule.get_positions()
+            return_dict[i] = (conformer.ase_molecule.get_positions(),energy)
         return True
 
     #if not isinstance(conformer,TS):
@@ -345,12 +345,12 @@ def systematic_search(conformer,
                 complete[i] = True
 
     energies = []
-    for positions in list(return_dict.values()):
+    for positions,energy in list(return_dict.values()):
         conf = conformer.copy()
         conf.ase_molecule.positions = positions
-        conf.ase_molecule.set_calculator(calc)
-        energy = conf.ase_molecule.get_potential_energy()
         conf.update_coords_from("ase")
+        # conf.ase_molecule.set_calculator(calc)
+        # energy = conf.ase_molecule.get_potential_energy()
         energies.append((conf,energy))
 
     df = pd.DataFrame(energies,columns=["conformer","energy"])
