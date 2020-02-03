@@ -978,6 +978,17 @@ class ThermoJob():
                         max_conformers = options["max_conformers"], 
                         multiplicity = options["vary_multiplicity"])
 
+                else:
+                    conformer_dir = os.path.join(self.calculator.directory,
+                                "species", method_name, smiles, "conformers")
+                    logs = [x for x in os.listdir(conformer_dir) if x.endswith('.com')]
+                    conformers = [ref_conformer.copy() for i in range(len(logs))]
+                    confs = []
+                    for i,conf in enumerate(conformers):
+                        conf.index = i
+                        confs.append(conf)
+                    species.conformers[smiles] = confs
+
                 currently_running = []
                 processes = {}
                 
