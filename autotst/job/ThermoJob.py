@@ -26,7 +26,7 @@ from shutil import move, copyfile, copytree, rmtree
 import numpy as np
 import pandas as pd
 import subprocess
-from subprocess import STDOUT, check_output, TimeoutExpired
+from subprocess import STDOUT, check_output, TimeoutExpired,  CalledProcessError
 import multiprocessing
 from multiprocessing import Process, Manager
 import logging
@@ -53,7 +53,8 @@ def check_complete(label, user):
         output = check_output(command, shell= True, timeout=30)
     except TimeoutExpired as e:
         logging.info(e)
-        return False
+        time.sleep(30)
+        return check_complete(label, user)
     
     if len(output.decode("utf-8").splitlines()) <= 1:
         return True
@@ -69,7 +70,7 @@ def get_jobs_in_queue(user):
         output = check_output(command, shell= True, timeout=30)
     except TimeoutExpired as e:
         time.sleep(120)
-        output = get_jobs_in_queue(user)
+        return get_jobs_in_queue(user)
 
     jobs = len(output.decode("utf-8").splitlines()) - 2
     return jobs
@@ -211,9 +212,16 @@ class ThermoJob():
                         label,calc.parameters["partition"],calc.parameters["nprocshared"],calc.parameters["time"],calc.parameters["mem"],self.allocation_id), shell=True, cwd=calc.scratch, stderr=STDOUT
                         ).decode("utf-8") 
                 logging.info("Starting calculations for {}".format(conformer))
-            except TimeoutExpired as e:
-                time.sleep(10)
-                self._submit_conformer(conformer, calc, restart)
+            except CalledProcessError as e:
+                logging.info(e)
+                if not check_complete(label=label, user=self.discovery_username):
+                    logging.info(
+                        "It appears that {} is already in the queue...not submitting".format(label))
+                    return label
+                else:
+                    logging.info("Resubmitting in 5 min")
+                    time.sleep(300)
+                    return self._submit_conformer(conformer, calc, restart)
             
             if 'Job violates accounting/QOS policy' in output:
                 number_of_jobs =  self.get_jobs_in_queue(self.discovery_username)
@@ -244,7 +252,7 @@ class ThermoJob():
         logging.info(
             "Submitting conformer calculation for {}".format(calc.label))
         label = self._submit_conformer(conformer,calc)
-        time.sleep(15)
+        time.sleep(5)
         while not check_complete(label=label,user=self.discovery_username):
             time.sleep(120)
 
@@ -257,7 +265,7 @@ class ThermoJob():
             calc.parameters["mem"] = "30GB"
             calc.parameters["nprocshared"] = 8
             label = self._submit_conformer(conformer,calc,restart=True)
-            time.sleep(15)
+            time.sleep(5)
             while not check_complete(label=label,user=self.discovery_username):
                 time.sleep(120)
 
@@ -274,7 +282,7 @@ class ThermoJob():
             calc.parameters["nprocshared"] = 8
             calc.parameters["mem"] = '30GB'
             label = self._submit_conformer(conformer,calc, restart=True)
-            time.sleep(15)
+            time.sleep(5)
             while not check_complete(label=label,user=self.discovery_username):
                 time.sleep(120)
 
@@ -308,7 +316,7 @@ class ThermoJob():
             calc = self.calculator.get_conformer_calc()
 
             label = self._submit_conformer(conformer,calc)
-            time.sleep(15)
+            time.sleep(5)
             while not check_complete(label=label,user=self.discovery_username):
                 time.sleep(120)
 
@@ -352,7 +360,7 @@ class ThermoJob():
         logging.info(
             "Submitting {} calculation".format(calc.label))
         label = self._submit_conformer(conformer,calc,restart)
-        time.sleep(15)
+        time.sleep(5)
         while not check_complete(label=label,user=self.discovery_username):
             time.sleep(60)
 
@@ -368,7 +376,7 @@ class ThermoJob():
             calc.parameters["nprocshared"] = 16
             calc.parameters["mem"] = "100Gb"
             label = self._submit_conformer(conformer,calc, restart=True)
-            time.sleep(15)
+            time.sleep(5)
             while not check_complete(label=label,user=self.discovery_username):
                 time.sleep(60)
 
@@ -404,7 +412,7 @@ class ThermoJob():
             os.remove(log_path)
 
             label = self._submit_conformer(conformer,calc)
-            time.sleep(15)
+            time.sleep(5)
             while not check_complete(label=label,user=self.discovery_username):
                 time.sleep(60)
 
@@ -426,7 +434,7 @@ class ThermoJob():
                 calc.parameters["nprocshared"] = 16
                 calc.parameters["mem"] = "300Gb"
                 label = self._submit_conformer(conformer,calc, restart=True)
-                time.sleep(60)
+                time.sleep(5)
                 while not check_complete(label=label,user=self.discovery_username):
                     time.sleep(60)
 
@@ -640,7 +648,7 @@ class ThermoJob():
             self.calculator.settings["dispersion"] = None
             calc = self.calculator.get_freq_calc()
             label = self._submit_conformer(conformer,calc,restart=True)
-            time.sleep(15)
+            time.sleep(5)
             while not check_complete(label=label,user=self.discovery_username):
                 time.sleep(60)
 
@@ -1137,7 +1145,7 @@ class ThermoJob():
                 logging.info(
                     "Submitting conformer calculation for {}".format(calc.label))
                 label = self._submit_conformer(ref_conformer, calc)
-                time.sleep(15)
+                time.sleep(5)
                 while not check_complete(label=label, user=self.discovery_username):
                     time.sleep(120)
 
@@ -1238,7 +1246,7 @@ class ThermoJob():
                     """python $RMGpy/Arkane.py arkane_input.py""", 
                     shell=True, cwd=arkane_calc.directory)
                 while not os.path.exists(yml_file):
-                    time.sleep(120)
+                    time.sleep(20)
             time.sleep(5)
             os.remove(os.path.join(arkane_dir,label + ".log"))
             dest = os.path.join(
@@ -1335,7 +1343,7 @@ class ThermoJob():
                 self.calculator.settings["dispersion"] = None
                 calc = self.calculator.get_freq_calc()
                 label = self._submit_conformer(conformer,calc)
-                time.sleep(15)
+                time.sleep(5)
                 while not check_complete(label=label,user=self.discovery_username):
                     time.sleep(60)
 
