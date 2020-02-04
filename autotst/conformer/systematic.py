@@ -239,7 +239,7 @@ def systematic_search(conformer,
         conformer.energy = energy
         if len(return_dict)>0:
             conformer_copy = conformer.copy()
-            for index,post in return_dict.items():
+            for index, (post, energy) in return_dict.items():
                 conf_copy = conformer.copy()
                 conf_copy.ase_molecule.positions = post
                 conf_copy.update_coords_from("ase")
