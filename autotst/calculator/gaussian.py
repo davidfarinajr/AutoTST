@@ -501,28 +501,28 @@ class Gaussian():
 
         convergence = self.settings["convergence"].upper()
 
-        num_atoms = self.conformer.rmg_molecule.get_num_atoms()
+        num_atoms = self.conformer.rmg_molecule.get_num_atoms() - self.conformer.rmg_molecule.get_num_atoms('H')
         
-        if num_atoms <= 4:
+        if num_atoms <= 2:
             self.settings["nprocshared"] = 1
             self.settings["mem"] = '10GB'
-            self.settings["time"] = '12:00:00'
-        elif num_atoms <= 8:
-            self.settings["mem"] = '15GB'
-            self.settings["nprocshared"] = 3
-            self.settings["time"] = '12:00:00'
-        elif num_atoms <= 15:
-            self.settings["mem"] = '20GB'
-            self.settings["nprocshared"] = 6
-            self.settings["time"] = '12:00:00'
-        elif num_atoms <= 20:
+            self.settings["time"] = '24:00:00'
+        elif num_atoms <= 4:
             self.settings["mem"] = '30GB'
-            self.settings["nprocshared"] = 8
-            self.settings["time"] = '12:00:00'
-        else:
+            self.settings["nprocshared"] = 3
+            self.settings["time"] = '24:00:00'
+        elif num_atoms <= 6:
             self.settings["mem"] = '40GB'
-            self.settings["nprocshared"] = 12
-            self.settings["time"] = '12:00:00'
+            self.settings["nprocshared"] = 6
+            self.settings["time"] = '24:00:00'
+        elif num_atoms <= 8:
+            self.settings["mem"] = '50GB'
+            self.settings["nprocshared"] = 8
+            self.settings["time"] = '24:00:00'
+        else:
+            self.settings["mem"] = '50GB'
+            self.settings["nprocshared"] = 10
+            self.settings["time"] = '24:00:00'
 
         if isinstance(self.conformer, TS):
             logging.info(
@@ -737,9 +737,21 @@ class Gaussian():
         if num_atoms <= 6:
             self.settings["mem"] = '120GB'
             self.settings["nprocshared"] = 12
-        else:
+        elif num_atoms <= 8:
             self.settings["mem"] = '180GB'
             self.settings["nprocshared"] = 16
+        elif num_atoms <= 10:
+            self.settings["mem"] = '250GB'
+            self.settings["nprocshared"] = 20
+        elif num_atoms <= 12:
+            self.settings["mem"] = '380GB'
+            self.settings["nprocshared"] = 16
+        else:
+            self.settings["mem"] = '500GB'
+            self.settings["nprocshared"] = 28
+
+        
+
             
         if isinstance(self.conformer, TS):
             logging.info(
