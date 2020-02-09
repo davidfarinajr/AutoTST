@@ -442,9 +442,20 @@ class ThermoJob():
             elif not complete:
                 logging.info(
                     "It appears that {} was killed prematurely".format(calc.label))
-                calc.parameters["time"] = "24:00:00"
-                calc.parameters["nprocshared"] = 16
-                calc.parameters["mem"] = "300Gb"
+
+                exceeded_mem = False
+                lines = open(slurm_path,'r').readlines()
+                for l in lines:
+                    if "Exceeded job memory limit" in l:
+                        exceeded_mem = True
+                        break
+
+                if exceeded_mem is True:
+                    logging.info("{} exceeded mem limit, increasing mem to 300 Gb and resubmitting".format(calc.label))
+                    calc.parameters["time"] = "24:00:00"
+                    calc.parameters["nprocshared"] = 16
+                    calc.parameters["mem"] = "300Gb"
+
                 label = self._submit_conformer(conformer,calc, restart=True)
                 time.sleep(5)
                 while not check_complete(label=label,user=self.discovery_username):
