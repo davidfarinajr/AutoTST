@@ -209,10 +209,9 @@ class ThermoJob():
                 logging.info("Starting calculations for {}".format(conformer))
             try:
                 output = subprocess.check_output(
-                    """sbatch --exclude=c5003,c3040,c3041 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p {1} -N 1 -n {2} -t {3} --mem={4} $AUTOTST/autotst/job/submit.sh""".format(
+                    """sbatch --exclude=c5003,c3040 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p {1} -N 1 -n {2} -t {3} --mem={4} $AUTOTST/autotst/job/submit.sh""".format(
                         label,calc.parameters["partition"],calc.parameters["nprocshared"],calc.parameters["time"],calc.parameters["mem"]), shell=True, cwd=calc.scratch, stderr=STDOUT
                         ).decode("utf-8") 
-                logging.info("Starting calculations for {}".format(conformer))
             except CalledProcessError as e:
                 logging.info(e)
                 if not check_complete(label=label, user=self.discovery_username):
@@ -262,8 +261,8 @@ class ThermoJob():
             logging.info(
                 "It seems that the file never completed for {} completed, running it again".format(calc.label))
             calc.parameters["time"] = "24:00:00"
-            calc.parameters["mem"] = "30GB"
-            calc.parameters["nprocshared"] = 8
+            calc.parameters["mem"] = "120GB"
+            calc.parameters["nprocshared"] = 16
             label = self._submit_conformer(conformer,calc,restart=True)
             time.sleep(15)
             while not check_complete(label=label,user=self.discovery_username):
@@ -279,8 +278,8 @@ class ThermoJob():
             logging.info(
                 "It appears that {} was killed prematurely".format(calc.label))
             calc.parameters["time"] = "24:00:00"
-            calc.parameters["nprocshared"] = 8
-            calc.parameters["mem"] = '30GB'
+            calc.parameters["nprocshared"] = 16
+            calc.parameters["mem"] = '300GB'
             label = self._submit_conformer(conformer,calc, restart=True)
             time.sleep(15)
             while not check_complete(label=label,user=self.discovery_username):
@@ -357,6 +356,7 @@ class ThermoJob():
         calc.label = "{}_{}".format(conformer.smiles, sp_method)
         label = calc.label
         log_path = os.path.join(calc.scratch,calc.label + ".log")
+        slurm_path = os.path.join(calc.scratch,calc.label + ".slurm.log")
         logging.info(
             "Submitting {} calculation".format(calc.label))
         label = self._submit_conformer(conformer,calc,restart)
@@ -372,9 +372,20 @@ class ThermoJob():
         if not complete: # try again
             logging.info(
                 "It appears that {} was killed prematurely".format(calc.label))
-            calc.parameters["time"] = "24:00:00"
-            calc.parameters["nprocshared"] = 16
-            calc.parameters["mem"] = "100Gb"
+
+            exceeded_mem = False
+            lines = open(slurm_path,'r').readlines()
+            for l in lines:
+                if "Exceeded job memory limit" in l:
+                    exceeded_mem = True
+                    break
+
+            if exceeded_mem is True:
+                logging.info("{} exceeded mem limit, increasing mem to 300 Gb and resubmitting".format(calc.label))
+                calc.parameters["time"] = "24:00:00"
+                calc.parameters["nprocshared"] = 16
+                calc.parameters["mem"] = "300Gb"
+            
             label = self._submit_conformer(conformer,calc, restart=True)
             time.sleep(15)
             while not check_complete(label=label,user=self.discovery_username):
@@ -1264,10 +1275,15 @@ class ThermoJob():
                 logging.info('It appears the arkane job failed or was never run for {}'.format(smiles))
 
         if options["run_sp"]:
-
+            
             label =  "{}_{}".format(smiles,method_name)
             conformer = Conformer(smiles=smiles)
-            log = os.path.join(self.directory,"species",method_name,conformer.smiles,label+"_optfreq.log")
+            freq_log = os.path.join(self.directory,"species",method_name,conformer.smiles,"sp",conformer.smiles+"_B3LYP_freq.log")
+            if os.path.exists(freq_log):
+                logging.info("Reading coords from existing freq log for G4 calc")
+                log = freq_log
+            else:
+                log = os.path.join(self.directory,"species",method_name,conformer.smiles,label+"_optfreq.log")
             assert os.path.exists(log), "It appears the calculation failed for {}...cannot perform single point calculations".format(conformer.smiles)
             complete, converged = self.calculator.verify_output_file(log)
             assert all([complete, converged]), "It appears the log file in incomplete or did not converge"
@@ -1317,6 +1333,7 @@ class ThermoJob():
                 complete, converged = self.calculator.verify_output_file(log_path)
                 if not all([complete,converged]):
                     logging.info("It seems the log file {} is incomplete or didnt converge".format(log_path))
+                    assert False                
                 conformer = Conformer(smiles=self.rmg_mol.smiles)
                 conformer.smiles = smiles
                 assert check_isomorphic(conformer,log_path)
