@@ -115,7 +115,7 @@ class Gaussian():
                      "convergence": "",
                      "nprocshared": 20,
                      "time": "24:00:00",
-                     "partition": 'general,west'
+                     "partition": 'short,west'
                  },
                  directory=".", #where you want input and log files to be written, default is current directory
                  scratch=None  #where you want temporary files to be written
@@ -391,25 +391,25 @@ class Gaussian():
         convergence = self.settings["convergence"].upper()
 
         self.settings["mem"] = '10GB'
-        num_atoms = self.conformer.rmg_molecule.get_num_atoms()
+        num_atoms = self.conformer.rmg_molecule.get_num_atoms() - self.conformer.rmg_molecule.get_num_atoms('H')
 
-        if num_atoms <= 4:
+        if num_atoms <= 2:
             self.settings["nprocshared"] = 2
             self.settings["time"] = '12:00:00'
-        elif num_atoms <= 8:
-            self.settings["mem"] = '15GB'
-            self.settings["nprocshared"] = 4
-            self.settings["time"] = '12:00:00'
-        elif num_atoms <= 15:
+        elif num_atoms <= 4:
             self.settings["mem"] = '20GB'
             self.settings["nprocshared"] = 6
             self.settings["time"] = '12:00:00'
-        elif num_atoms <= 20:
+        elif num_atoms <= 10:
             self.settings["mem"] = '30GB'
             self.settings["nprocshared"] = 8
             self.settings["time"] = '12:00:00'
-        else:
+        elif num_atoms <= 20:
             self.settings["mem"] = '40GB'
+            self.settings["nprocshared"] = 12
+            self.settings["time"] = '12:00:00'
+        else:
+            self.settings["mem"] = '50GB'
             self.settings["nprocshared"] = 12
             self.settings["time"] = '12:00:00'
 
@@ -603,27 +603,23 @@ class Gaussian():
             dispersion = ''
 
         self.settings["mem"] = '10GB'
+        self.settings["time"] = '1:00:00'
         num_atoms = self.conformer.rmg_molecule.get_num_atoms()
         
         if num_atoms <= 4:
-            self.settings["nprocshared"] = 1
-            self.settings["time"] = '12:00:00'
+            self.settings["nprocshared"] = 4
         elif num_atoms <= 8:
             self.settings["mem"] = '15GB'
-            self.settings["nprocshared"] = 2
-            self.settings["time"] = '12:00:00'
+            self.settings["nprocshared"] = 6
         elif num_atoms <= 15:
             self.settings["mem"] = '20GB'
-            self.settings["nprocshared"] = 4
-            self.settings["time"] = '12:00:00'
+            self.settings["nprocshared"] = 8
         elif num_atoms <= 20:
             self.settings["mem"] = '30GB'
-            self.settings["nprocshared"] = 4
-            self.settings["time"] = '12:00:00'
+            self.settings["nprocshared"] = 8
         else:
             self.settings["mem"] = '40GB'
-            self.settings["nprocshared"] = 6
-            self.settings["time"] = '12:00:00'
+            self.settings["nprocshared"] = 10
 
         if isinstance(self.conformer, TS):
             logging.info(
@@ -662,7 +658,7 @@ class Gaussian():
         ase_gaussian.atoms = self.conformer.ase_molecule
         ase_gaussian.directory = new_scratch
         ase_gaussian.label = label
-        ase_gaussian.parameters["partition"] = self.settings["partition"]
+        ase_gaussian.parameters["partition"] = "express"
         ase_gaussian.parameters["time"] = self.settings["time"]
         del ase_gaussian.parameters['force']
         return ase_gaussian
@@ -683,13 +679,13 @@ class Gaussian():
 
         if num_atoms <= 4:
             self.settings["nprocshared"] = 1
-            self.settings["time"] = '6:00:00'
+            self.settings["time"] = '1:00:00'
         elif num_atoms <= 10:
             self.settings["nprocshared"] = 2
-            self.settings["time"] = '6:00:00'
+            self.settings["time"] = '1:00:00'
         else:
             self.settings["nprocshared"] = 4
-            self.settings["time"] = '6:00:00'
+            self.settings["time"] = '1:00:00'
 
         label = "{}_nbo".format(self.conformer.smiles)
 
@@ -718,7 +714,7 @@ class Gaussian():
         ase_gaussian.atoms = self.conformer.ase_molecule
         ase_gaussian.directory = new_scratch
         ase_gaussian.label = label
-        ase_gaussian.parameters["partition"] = self.settings["partition"]
+        ase_gaussian.parameters["partition"] = "express"
         ase_gaussian.parameters["time"] = self.settings["time"]
         del ase_gaussian.parameters['force']
         return ase_gaussian
@@ -736,13 +732,13 @@ class Gaussian():
         assert method in gaussian_methods
 
         self.settings["time"] = "24:00:00"
-        num_atoms = self.conformer.rmg_molecule.get_num_atoms()
+        num_atoms = self.conformer.rmg_molecule.get_num_atoms() - self.conformer.rmg_molecule.get_num_atoms('H')
         
-        if num_atoms <= 18:
-            self.settings["mem"] = '80GB'
-            self.settings["nprocshared"] = 8
+        if num_atoms <= 6:
+            self.settings["mem"] = '120GB'
+            self.settings["nprocshared"] = 12
         else:
-            self.settings["mem"] = '300GB'
+            self.settings["mem"] = '180GB'
             self.settings["nprocshared"] = 16
             
         if isinstance(self.conformer, TS):
