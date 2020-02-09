@@ -209,7 +209,7 @@ class ThermoJob():
                 logging.info("Starting calculations for {}".format(conformer))
             try:
                 output = subprocess.check_output(
-                    """sbatch --exclude=c5003,c3040 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p {1} -N 1 -n {2} -t {3} --mem={4} $AUTOTST/autotst/job/submit.sh""".format(
+                    """sbatch --exclude=c5003 --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p {1} -N 1 -n {2} -t {3} --mem={4} $AUTOTST/autotst/job/submit.sh""".format(
                         label,calc.parameters["partition"],calc.parameters["nprocshared"],calc.parameters["time"],calc.parameters["mem"]), shell=True, cwd=calc.scratch, stderr=STDOUT
                         ).decode("utf-8") 
             except CalledProcessError as e:
@@ -357,6 +357,7 @@ class ThermoJob():
         label = calc.label
         log_path = os.path.join(calc.scratch,calc.label + ".log")
         slurm_path = os.path.join(calc.scratch,calc.label + ".slurm.log")
+        logging.info(slurm_path)
         logging.info(
             "Submitting {} calculation".format(calc.label))
         label = self._submit_conformer(conformer,calc,restart)
@@ -381,10 +382,10 @@ class ThermoJob():
                     break
 
             if exceeded_mem is True:
-                logging.info("{} exceeded mem limit, increasing mem to 300 Gb and resubmitting".format(calc.label))
+                logging.info("{} exceeded mem limit, increasing mem to 375 Gb and resubmitting".format(calc.label))
                 calc.parameters["time"] = "24:00:00"
                 calc.parameters["nprocshared"] = 16
-                calc.parameters["mem"] = "300Gb"
+                calc.parameters["mem"] = "375Gb"
             
             label = self._submit_conformer(conformer,calc, restart=True)
             time.sleep(15)
@@ -450,10 +451,10 @@ class ThermoJob():
                         break
 
                 if exceeded_mem is True:
-                    logging.info("{} exceeded mem limit, increasing mem to 300 Gb and resubmitting".format(calc.label))
+                    logging.info("{} exceeded mem limit, increasing mem to 375 Gb and resubmitting".format(calc.label))
                     calc.parameters["time"] = "24:00:00"
                     calc.parameters["nprocshared"] = 16
-                    calc.parameters["mem"] = "300Gb"
+                    calc.parameters["mem"] = "375Gb"
 
                 label = self._submit_conformer(conformer,calc, restart=True)
                 time.sleep(60)
@@ -655,6 +656,7 @@ class ThermoJob():
             complete, converged = self.calculator.verify_output_file(log_path)
             if not all([complete,converged]):
                 logging.info("It seems the log file {} is incomplete or didnt converge".format(log_path))
+                assert False
             # conformer = Conformer(smiles=self.rmg_mol.smiles)
             # conformer.smiles = smiles
             assert check_isomorphic(conformer,log_path)
@@ -1374,6 +1376,7 @@ class ThermoJob():
             complete, converged = self.calculator.verify_output_file(log_path)
             if not all([complete,converged]):
                 logging.info("It seems the log file {} is incomplete or didnt converge".format(log_path))
+                assert False
             conformer = Conformer(smiles=self.rmg_mol.smiles)
             conformer.smiles = smiles
             assert check_isomorphic(conformer,log_path)
@@ -1415,15 +1418,19 @@ class ThermoJob():
                 sp_dir = os.path.join(self.directory,"species",method_name,smiles,"sp")
                 log_path = os.path.join(sp_dir,label + '.log')
                 freq_path = os.path.join(sp_dir,freq_label + '.log')
+                complete, converged = self.calculator.verify_output_file(log_path)
+                if not all([complete,converged]):
+                    logging.info("It seems the log file {} is incomplete or didnt converge".format(log_path))
+                    continue
+                complete, converged = self.calculator.verify_output_file(freq_path)
+                if not all([complete,converged]):
+                    logging.info("It seems the log file {} is incomplete or didnt converge".format(freq_path))
+                    continue
 
                 if self.torsion_conformer is not None:
                     conf = self.torsion_conformer
+                    assert check_isomorphic(conf,log_path)
                 else:
-                    
-                    complete, converged = self.calculator.verify_output_file(log_path)
-                    if not all([complete,converged]):
-                        logging.info("It seems the log file {} is incomplete or didnt converge".format(log_path))
-                        continue
                     conf = Conformer(smiles=self.rmg_mol.smiles)
                     assert check_isomorphic(conf,log_path)
                     dft_label =  "{}_{}_optfreq".format(smiles,method_name)
