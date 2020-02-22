@@ -36,16 +36,15 @@ class Orca():
     """
     A class for writing and reading Orca jobs.
     """
-    def __init__(self,conformer=None,directory='.',partition='general',time='1-00:00:00',nprocs=20,mem=110):
+    def __init__(self,conformer=None,directory='.',partition='short',time='24:00:00',nprocs=16,mem=120):
         
         self.command = 'orca'
-        self.directory = directory
-        if not os.path.exists(directory):
-            os.makedirs(self.directory)
+        self.directory = self.scratch = directory
         if conformer:
             assert isinstance(conformer, Conformer), 'conformer must be an autotst conformer object'
             self.conformer = conformer
             self.load_conformer_attributes()
+            self.label = "{}_orca".format(self.conformer.smiles)
         else:
             self.label = None
             self.conformer = None
@@ -113,9 +112,9 @@ class Orca():
         
         # Assign smiles or reaction label as label attribute
         if isinstance(self.conformer, TS):
-            self.label = self.conformer.reaction_label
+            self.label = self.conformer.reaction_label + "_orca"
         else:
-            self.label = self.conformer.smiles
+            self.label = self.conformer.smiles + "_orca"
 
         # Replace problematic characters in temporary files and assign to base attribute
         if '(' in self.label or '#' in self.label:
@@ -167,7 +166,7 @@ class Orca():
             f.write(self.coords)
             f.write('*\n')
 
-    def write_sp_input(self, directory=None, nprocs=None, mem=None, method = 'ccsd(t)-f12', basis= 'cc-pvdz-f12', atom_basis = {'Cl':'cc-pvt(+d)z','Br':'aug-cc-pvtz'}, use_atom_basis = False,
+    def write_sp_input(self, directory=None, nprocs=None, mem=None, method = 'ccsd(t)-f12', basis= 'cc-pvdz-f12', atom_basis = {'Br':'aug-cc-pvtz'}, use_atom_basis = False,
                         scf_convergence = 'verytightscf', max_iter = '600'):
         """
         A method to write single point energy calculation input files for ORCA.
@@ -189,6 +188,10 @@ class Orca():
         
         # Make sure we have required properties of conformer to run the job
         assert None not in [self.mult, self.charge, self.coords]
+        
+        self.mult = self.conformer.rmg_molecule.multiplicity
+        self.charge = self.conformer.rmg_molecule.get_net_charge()
+        self.coords = self.conformer.get_xyz_block()
 
         # Get mem_per_proc needed to write input
         if (mem or nprocs) is not None:
@@ -232,16 +235,16 @@ class Orca():
         # Select UHF for open-shell,
         # RHF for closed shell molecules
         if 'hf' not in method:
-            if int(self.mult) == 1:
-                hf = 'rhf'
+            if int(self.conformer.rmg_molecule.multiplicity) == 1:
+                hf = 'RHF'
             else:
-                hf = 'uhf'
+                hf = 'UHF'
         else:
-            if int(self.mult) == 1:
-                method = 'rhf'
+            if int(self.conformer.rmg_molecule.multiplicity) == 1:
+                method = 'RHF'
                 hf = ''
             else:
-                method = 'uhf'
+                method = 'UHF'
                 hf = ''
 
         # Auxiliary basis sets for F12 methods
@@ -253,8 +256,8 @@ class Orca():
         # Get auxiliary basis sets 
         if basis in auxiliary_basis_sets_dict.keys():
             aux_basis = auxiliary_basis_sets_dict.get(basis)
-            if int(self.mult) == 1 or 'hf' in method:
-                aux_basis = aux_basis.split(' ')[0]
+            # if int(self.conformer.rmg_molecule.multiplicity) == 1 or 'hf' in method:
+            #     aux_basis = aux_basis.split(' ')[0]
         else:
             aux_basis = ''
 
@@ -278,7 +281,7 @@ class Orca():
         if use_atom_basis is True and len(new_basis_strs) > 0:
             file_name = self.label + '_' + method + '[' + str(basis) + ',' + str(new_basis)+ ']' + '.inp'
         else:
-            file_name = self.label + '_' + method + '[' + str(basis) + ']' + '.inp'
+            file_name = self.label + '.inp'
         if '/' in file_name:
             file_name = file_name.replace('/','-')
 
@@ -296,14 +299,43 @@ class Orca():
             base = base.replace('(', '{').replace(')', '}').replace('#', '=-').replace('/','-')
 
         # Write sp input
-        with open(file_path, 'w+') as f:
+        with open(file_path, 'w') as f:
             f.write('# {0}/{1} calculation for {2} \n'.format(method,basis,self.label))
-            f.write('! {0} {1} {2} {3} {4} PRINTBASIS\n'.format(hf.upper(),method.upper(),basis.upper(),aux_basis.upper(),scf_convergence.upper()))
-            f.write('\n')
-            f.write('%pal nprocs {0} end \n'.format(nprocs))
+            f.write('! {0} MP2-F12 cc-pVDZ-F12 cc-pVDZ-F12-CABS cc-pVTZ/C VeryTightSCF FrozenCore UNO UCO\n'.format(hf.upper()))
+            f.write('%pal nprocs {0} end\n'.format(nprocs))
             f.write('%maxcore {0}\n'.format(mem_per_proc))
             f.write('%scf\n  MaxIter  {0}\nend\n'.format(max_iter))
-            f.write('%base "{0}" \n'.format(base))
+            f.write('%base "mp2_dz"\n')
+            if use_atom_basis is True and len(new_basis_strs) > 0:
+                f.write('%basis\n')
+                f.writelines(new_basis_strs)
+                f.write('end\n')
+            f.write('*xyz {0} {1}\n'.format(self.charge, self.mult))
+            f.write(self.coords)
+            f.write('*\n')
+            f.write('\n')
+            f.write('$new_job\n')
+            f.write('\n')
+            f.write('! {0} MP2-F12 cc-pVTZ-F12 cc-pVTZ-F12-CABS cc-pVQZ/C VeryTightSCF FrozenCore UNO UCO\n'.format(hf.upper()))
+            f.write('%pal nprocs {0} end\n'.format(nprocs))
+            f.write('%maxcore {0}\n'.format(mem_per_proc))
+            f.write('%scf\n  MaxIter  {0}\nend\n'.format(max_iter))
+            f.write('%base "mp2_tz"\n')
+            if use_atom_basis is True and len(new_basis_strs) > 0:
+                f.write('%basis\n')
+                f.writelines(new_basis_strs)
+                f.write('end\n')
+            f.write('*xyz {0} {1}\n'.format(self.charge, self.mult))
+            f.write(self.coords)
+            f.write('*\n')
+            f.write('\n')
+            f.write('$new_job\n')
+            f.write('\n')
+            f.write('! {0} {1} {2} {3} {4} FrozenCore UNO UCO\n'.format(hf.upper(),method.upper(),basis.upper(),aux_basis.upper(),scf_convergence.upper()))
+            f.write('%pal nprocs {0} end \n'.format(nprocs))
+            f.write('%maxcore {0}\n'.format(mem_per_proc))
+            f.write('%mdci\n  MaxIter  {0}\nend\n'.format(max_iter))
+            f.write('%base "ccsdt_dz"\n')
             if use_atom_basis is True and len(new_basis_strs) > 0:
                 f.write('%basis\n')
                 f.writelines(new_basis_strs)
@@ -439,7 +471,7 @@ class Orca():
 
         return label
 
-    def check_NormalTermination(self,path):
+    def check_normal_termination(self,path):
         """
         checks if an Orca job terminated normally.
         Returns True is normal termination and False if something went wrong.
