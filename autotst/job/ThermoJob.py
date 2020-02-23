@@ -180,8 +180,11 @@ class ThermoJob():
         """
         assert conformer, "Please provide a conformer to submit a job"
 
-        write_input(conformer, calc)
-        label = calc.label
+        if "orca" not in calc.label:
+            write_input(conformer, calc)
+            label = calc.label
+        else:
+            label = calc.write_sp_input()
         log_path = os.path.join(calc.scratch,label + '.log')
 
 
@@ -280,7 +283,7 @@ class ThermoJob():
                 "It appears that {} was killed prematurely".format(calc.label))
             calc.parameters["time"] = "24:00:00"
             calc.parameters["nprocshared"] = 16
-            calc.parameters["mem"] = '300GB'
+            calc.parameters["mem"] = '120GB'
             label = self._submit_conformer(conformer,calc, restart=True)
             time.sleep(5)
             while not check_complete(label=label,user=self.discovery_username):
@@ -344,27 +347,45 @@ class ThermoJob():
     def calculate_sp(self,conformer,sp_method,restart=False):
 
         method_name = self.method_name
-        self.calculator.conformer = conformer
-        self.calculator.settings["convergence"] = "TIGHT"
-        self.calculator.settings["sp"] = sp_method
-        calc = self.calculator.get_sp_calc()
-        calc.scratch = calc.directory = os.path.join(
-            self.directory,
-            "species",
-            method_name,
-            conformer.smiles,
-            "sp")
-        calc.label = "{}_{}".format(conformer.smiles, sp_method)
-        label = calc.label
-        log_path = os.path.join(calc.scratch,calc.label + ".log")
-        slurm_path = os.path.join(calc.scratch,calc.label + ".slurm.log")
-        logging.info(slurm_path)
+
+        if str(sp_method) != "orca":
+            self.calculator.conformer = conformer
+            self.calculator.settings["convergence"] = "TIGHT"
+            self.calculator.settings["sp"] = sp_method
+            calc = self.calculator.get_sp_calc()
+            calc.scratch = calc.directory = os.path.join(
+                self.directory,
+                "species",
+                method_name,
+                conformer.smiles,
+                "sp")
+            calc.label = "{}_{}".format(conformer.smiles, sp_method)
+            label = calc.label
+            log_path = os.path.join(calc.scratch,calc.label + ".log")
+            slurm_path = os.path.join(calc.scratch,calc.label + ".slurm.log")
+        else:
+            calc = Orca(conformer=conformer,directory=os.path.join(
+                self.directory,
+                "species",
+                method_name,
+                conformer.smiles,
+                "sp"))
+            calc.label = "{}_{}".format(conformer.smiles, sp_method)
+            label = calc.label
+            log_path = os.path.join(calc.scratch,calc.label + ".log")
+            slurm_path = os.path.join(calc.scratch,calc.label + ".slurm.log")
+
         logging.info(
             "Submitting {} calculation".format(calc.label))
         label = self._submit_conformer(conformer,calc,restart)
         time.sleep(5)
         while not check_complete(label=label,user=self.discovery_username):
             time.sleep(60)
+
+        if str(sp_method) == "orca":
+            energy = calc.read_energy(log_path)
+            logging.info("sp energy is {} for {}".format(energy,conformer.smiles))
+            return calc.check_normal_termination(log_path)
 
         complete, converged = self.calculator.verify_output_file(log_path)
 
@@ -385,8 +406,8 @@ class ThermoJob():
             if exceeded_mem is True:
                 logging.info("{} exceeded mem limit, increasing mem to 375 Gb and resubmitting".format(calc.label))
                 calc.parameters["time"] = "24:00:00"
-                calc.parameters["nprocshared"] = 16
-                calc.parameters["mem"] = "375Gb"
+                calc.parameters["nprocshared"] = 28
+                calc.parameters["mem"] = "250Gb"
 
             label = self._submit_conformer(conformer,calc, restart=True)
             time.sleep(5)
@@ -454,8 +475,8 @@ class ThermoJob():
                 if exceeded_mem is True:
                     logging.info("{} exceeded mem limit, increasing mem to 375 Gb and resubmitting".format(calc.label))
                     calc.parameters["time"] = "24:00:00"
-                    calc.parameters["nprocshared"] = 16
-                    calc.parameters["mem"] = "375Gb"
+                    calc.parameters["nprocshared"] = 28
+                    calc.parameters["mem"] = "250Gb"
 
                 label = self._submit_conformer(conformer,calc, restart=True)
                 time.sleep(5)

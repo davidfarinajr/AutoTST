@@ -36,7 +36,7 @@ class Orca():
     """
     A class for writing and reading Orca jobs.
     """
-    def __init__(self,conformer=None,directory='.',partition='short',time='24:00:00',nprocs=16,mem=120):
+    def __init__(self,conformer=None,directory='.',partition='express',time='1:00:00',nprocs=16,mem="120GB"):
         
         self.command = 'orca'
         self.directory = self.scratch = directory
@@ -53,6 +53,18 @@ class Orca():
         self.mem = str(mem).upper()
         self.time = str(time)
         self.partition = partition
+
+        if self.conformer is not None:
+            num_heavy_atoms = self.conformer.rmg_molecule.get_num_atoms() - self.conformer.rmg_molecule.get_num_atoms('H')
+            if num_heavy_atoms == 0:
+                self.nprocs = 1
+                self.mem = "12GB"
+            elif num_heavy_atoms <= 2:
+                self.nprocs = 4
+                self.mem = "60GB"
+            elif num_heavy_atoms >= 7:
+                self.partition = "short"
+                self.time = "12:00:00"
 
         self.mem_per_proc = self.get_mem_per_proc()
         
@@ -274,8 +286,10 @@ class Orca():
                     new_basis_strs.append('  newGTO {} "{}" end\n'.format(atom, b))
         
         # Use RI for open-shell (Orca only supprts RI-F12 methods for open-shell)
+        mp = "MP2-F12"
         if method == 'ccsd(t)-f12' and int(self.mult) != 1:
             method = 'ccsd(t)-f12/ri'
+            mp = "MP2-F12-RI"
         
         # Create file name
         if use_atom_basis is True and len(new_basis_strs) > 0:
@@ -301,7 +315,7 @@ class Orca():
         # Write sp input
         with open(file_path, 'w') as f:
             f.write('# {0}/{1} calculation for {2} \n'.format(method,basis,self.label))
-            f.write('! {0} MP2-F12 cc-pVDZ-F12 cc-pVDZ-F12-CABS cc-pVTZ/C VeryTightSCF FrozenCore UNO UCO\n'.format(hf.upper()))
+            f.write('! {0} MP2-F12-RI cc-pVDZ-F12 cc-pVDZ-F12-CABS cc-pVTZ/C VeryTightSCF FrozenCore UNO UCO\n'.format(hf.upper()))
             f.write('%pal nprocs {0} end\n'.format(nprocs))
             f.write('%maxcore {0}\n'.format(mem_per_proc))
             f.write('%scf\n  MaxIter  {0}\nend\n'.format(max_iter))
@@ -316,7 +330,7 @@ class Orca():
             f.write('\n')
             f.write('$new_job\n')
             f.write('\n')
-            f.write('! {0} MP2-F12 cc-pVTZ-F12 cc-pVTZ-F12-CABS cc-pVQZ/C VeryTightSCF FrozenCore UNO UCO\n'.format(hf.upper()))
+            f.write('! {0} MP2-F12-RI cc-pVTZ-F12 cc-pVTZ-F12-CABS cc-pVQZ/C VeryTightSCF FrozenCore UNO UCO\n'.format(hf.upper()))
             f.write('%pal nprocs {0} end\n'.format(nprocs))
             f.write('%maxcore {0}\n'.format(mem_per_proc))
             f.write('%scf\n  MaxIter  {0}\nend\n'.format(max_iter))
@@ -331,7 +345,7 @@ class Orca():
             f.write('\n')
             f.write('$new_job\n')
             f.write('\n')
-            f.write('! {0} {1} {2} {3} {4} FrozenCore UNO UCO\n'.format(hf.upper(),method.upper(),basis.upper(),aux_basis.upper(),scf_convergence.upper()))
+            f.write('! {0} CCSD(T)-F12/RI cc-pVDZ-F12 cc-pVDZ-F12-CABS cc-pVTZ/C FrozenCore UNO UCO\n'.format(hf.upper()))
             f.write('%pal nprocs {0} end \n'.format(nprocs))
             f.write('%maxcore {0}\n'.format(mem_per_proc))
             f.write('%mdci\n  MaxIter  {0}\nend\n'.format(max_iter))
@@ -346,6 +360,25 @@ class Orca():
         
         return label
     
+    def read_energy(self,path):
+
+        assert self.check_normal_termination(path)
+
+        lines = open(path,'r').readlines()
+        SCF = None
+        MP2_F12 = []
+        CCSD_T_F12 = None
+        for line in lines:
+            if "HF basis set limit estimate" in line:
+                SCF = float(line.split()[-1].split('\n')[0])
+            if "MP2 basis set limit estimate" in line:
+                MP2_F12.append(float(line.split()[-1].split('\n')[0]))
+            if "Final correlation energy (with F12)" in line:
+                CCSD_T_F12 = float(line.split()[-1].split('\n')[0])
+
+        energy = SCF + MP2_F12[-1] - MP2_F12[0] + CCSD_T_F12
+        return energy
+
     def write_extrapolation_input(self, directory=None, nprocs=None, mem=None, option='EP3', basis_family='aug-cc', 
                                 scf_convergence='verytightscf', method='DLPNO-CCSD(T)', method_details='tightpno', 
                                 n=3, m=4):
@@ -484,6 +517,10 @@ class Orca():
             if "ORCA TERMINATED NORMALLY" in line:
                 complete = True
                 break
+        if complete is True:
+            logging.info("{} completed successfully".format(path))
+        else:
+            logging.info("{} failed".format(path))
         return complete
         
     def read_fod_log(self,path):
