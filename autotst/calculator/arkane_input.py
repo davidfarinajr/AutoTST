@@ -42,12 +42,13 @@ logging.basicConfig(format=FORMAT, level=logging.INFO)
 
 class Arkane_Input():
 
-    def __init__(self, conformer=None, modelChemistry=None, directory=None, gaussian_log_path=None, energy_log_path=None, geometry_log_path=None, frequencies_log_path=None, rotors_dir=None):
+    def __init__(self, conformer=None, energy=None, modelChemistry=None, directory=None, gaussian_log_path=None, energy_log_path=None, geometry_log_path=None, frequencies_log_path=None, rotors_dir=None):
         
         self.conformer = conformer
         self.modelChemistry = modelChemistry
         self.label = self.conformer.smiles + '_arkane'
         self.directory = directory
+        self.energy = energy
         if gaussian_log_path:
             self.energy_log_path = self.geometry_log_path = self.frequencies_log_path = gaussian_log_path
         else:
@@ -132,7 +133,10 @@ class Arkane_Input():
             f.write('opticalIsomers = 1\n')
             f.write('geometry = GaussianLog("{}")\n'.format(geometry_path))
             f.write('frequencies = GaussianLog("{}")\n'.format(frequencies_path))
-            f.write('energy = GaussianLog("{}")\n'.format(energy_path))
+            if self.energy is None:
+                f.write('energy = GaussianLog("{}")\n'.format(energy_path))
+            else:
+                f.write('energy = {' + "'{}':{}".format(self.modelChemistry, self.energy) + "}\n")
             if self.rotors_dir is not None:
                 f.write('rotors = [\n')
                 for torsion in self.conformer.torsions:
