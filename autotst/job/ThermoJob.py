@@ -1414,7 +1414,7 @@ class ThermoJob():
 
             single_point_method = self.calculator.settings["sp"]
 
-            label = smiles + '_' + single_point_method
+            label = smiles + '_' + 'G4'
             sp_dir = os.path.join(self.directory,"species",method_name,smiles,"sp")
             log_path = os.path.join(sp_dir,label + '.log')
             complete, converged = self.calculator.verify_output_file(log_path)
