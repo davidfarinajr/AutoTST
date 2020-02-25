@@ -388,9 +388,20 @@ class ThermoJob():
             time.sleep(60)
 
         if str(sp_method) == "orca":
-            energy = calc.read_energy(log_path)
-            logging.info("sp energy is {} for {}".format(energy,conformer.smiles))
-            return calc.check_normal_termination(log_path)
+            try:
+                energy = calc.read_energy(log_path)
+                logging.info("sp energy is {} for {}".format(energy,conformer.smiles))
+                return True
+            except:
+                calc.time = "24:00:00"
+                calc.partition = "short"
+                label = self._submit_conformer(conformer,calc,True)
+                while not check_complete(label=label, user=self.discovery_username):
+                    time.sleep(60)
+                energy = calc.read_energy(log_path)
+                logging.info("sp energy is {} for {}".format(
+                    energy, conformer.smiles))
+                return True
 
         complete, converged = self.calculator.verify_output_file(log_path)
 
@@ -1435,6 +1446,16 @@ class ThermoJob():
             'ARKANE_NEW_G40'
             )
 
+            if single_point_method == 'orca':
+                arkane_dir = os.path.join(
+                    self.directory,
+                    "species",
+                    method_name,
+                    smiles,
+                    "sp",
+                    'ARKANE_ORCA'
+                )
+
             if not os.path.exists(arkane_dir):
                 os.makedirs(arkane_dir)
 
@@ -1445,10 +1466,16 @@ class ThermoJob():
                 sp_dir = os.path.join(self.directory,"species",method_name,smiles,"sp")
                 log_path = os.path.join(sp_dir,label + '.log')
                 freq_path = os.path.join(sp_dir,freq_label + '.log')
-                complete, converged = self.calculator.verify_output_file(log_path)
-                if not all([complete,converged]):
-                    logging.info("It seems the log file {} is incomplete or didnt converge".format(log_path))
-                    continue
+
+                if sp_method == 'orca':
+                    orca_calc = Orca()
+                    sp_energy = orca_calc.read_energy(log_path)
+                else:
+                    sp_energy = None
+                    complete, converged = self.calculator.verify_output_file(log_path)
+                    if not all([complete,converged]):
+                        logging.info("It seems the log file {} is incomplete or didnt converge".format(log_path))
+                        continue
                 complete, converged = self.calculator.verify_output_file(freq_path)
                 if not all([complete,converged]):
                     logging.info("It seems the log file {} is incomplete or didnt converge".format(freq_path))
@@ -1471,17 +1498,19 @@ class ThermoJob():
                 copyfile(freq_path,
                 os.path.join(arkane_dir,freq_label+'.log'))
                 model_chem = sp_method
+                if sp_method == 'orca':
+                    model_chem = 'orca_ccsd(t)-f12/cc-pvdz-f12'
                 if options['rotors'] is True and len(conf.torsions) > 0:
                     if not os.path.exists(os.path.join(arkane_dir,'rotors')):
                         copytree(os.path.join(
                         self.directory, 'species', self.method_name, smiles, 'rotors'), os.path.join(arkane_dir,'rotors'))
-                    arkane_calc = Arkane_Input(conformer=conf,modelChemistry=model_chem,directory=arkane_dir,
+                    arkane_calc = Arkane_Input(conformer=conf, modelChemistry=model_chem, directory=arkane_dir, energy=sp_energy,
                 energy_log_path=log_path, geometry_log_path=freq_path, frequencies_log_path=freq_path, rotors_dir=os.path.join(arkane_dir,'rotors'))
                     arkane_calc.write_arkane_input(useAtomCorrections=options["use_atom_corrections"],
                                                    useBondCorrections=options["use_bond_corrections"], useIsodesmicReactions=options["use_isodesmic_reactions"],
                                                    useHinderedRotors=True)
                 else:
-                    arkane_calc = Arkane_Input(conformer=conf, modelChemistry=model_chem, directory=arkane_dir,
+                    arkane_calc = Arkane_Input(conformer=conf, modelChemistry=model_chem, directory=arkane_dir, energy=sp_energy,
                                                energy_log_path=log_path, geometry_log_path=freq_path, frequencies_log_path=freq_path,)
                     arkane_calc.write_arkane_input(useAtomCorrections=options["use_atom_corrections"],
                                                    useBondCorrections=options["use_bond_corrections"], useIsodesmicReactions=options["use_isodesmic_reactions"]
