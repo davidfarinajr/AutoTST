@@ -5,7 +5,8 @@
 #
 #   AutoTST - Automated Transition State Theory
 #
-#   Copyright (c) 2015-2018 Prof. Richard H. West (r.west@northeastern.edu)
+#   Copyright (c) 2015-2020 Richard H. West (r.west@northeastern.edu)
+#   and the AutoTST Team
 #
 #   Permission is hereby granted, free of charge, to any person obtaining a
 #   copy of this software and associated documentation files (the 'Software'),
@@ -27,24 +28,25 @@
 #
 ##########################################################################
 
-import os
-from autotst.species import Species, Conformer
-from autotst.reaction import Reaction, TS
-import logging
+import os, logging
+from ..species import Species, Conformer
+from ..reaction import Reaction, TS
 
 class Orca():
     """
     A class for writing and reading Orca jobs.
     """
-    def __init__(self,conformer=None,directory='.',partition='express',time='1:00:00',nprocs=16,mem="120GB"):
-        
+
+    def __init__(self, conformer=None, directory='.', partition='', time='24:00:00', nprocs=16, mem="120GB"):
+
         self.command = 'orca'
         self.directory = self.scratch = directory
         if conformer:
-            assert isinstance(conformer, Conformer), 'conformer must be an autotst conformer object'
+            assert isinstance(
+                conformer, Conformer), 'conformer must be an autotst conformer object'
             self.conformer = conformer
             self.load_conformer_attributes()
-            self.label = "{}_orca".format(self.conformer.smiles)
+            self.label = self.conformer.smiles + "_ORCA"
         else:
             self.label = None
             self.conformer = None
@@ -55,20 +57,37 @@ class Orca():
         self.partition = partition
 
         if self.conformer is not None:
-            num_heavy_atoms = self.conformer.rmg_molecule.get_num_atoms() - self.conformer.rmg_molecule.get_num_atoms('H')
+            num_heavy_atoms = self.conformer.rmg_molecule.get_num_atoms(
+            ) - self.conformer.rmg_molecule.get_num_atoms('H')
             if num_heavy_atoms == 0:
                 self.nprocs = 1
-                self.mem = "12GB"
+                self.mem = "10GB"
+                self.time = "1:00:00"
+                self.partition = "express"
             elif num_heavy_atoms <= 2:
                 self.nprocs = 4
+                self.mem = "30GB"
+                self.time = "1:00:00"
+                self.partition = "express"
+            elif num_heavy_atoms <= 4:
+                self.nprocs = 12
                 self.mem = "60GB"
-            elif num_heavy_atoms >= 7:
+                self.time = "24:00:00"
                 self.partition = "short"
-                self.time = "12:00:00"
+            elif num_heavy_atoms <= 8:
+                self.nprocs = 24
+                self.mem = "120GB"
+                self.time = "24:00:00"
+                self.partition = "short"
+            else:
+                self.nprocs = 24
+                self.mem = "216GB"
+                self.time = "24:00:00"
+                self.partition = "short"
 
         self.mem_per_proc = self.get_mem_per_proc()
-        
-    def get_mem_per_proc(self,mem=None,nprocs=None):
+
+    def get_mem_per_proc(self, mem=None, nprocs=None):
         """
         A method to calculate the memory per processor (in MB) for an Orca calculation.
         Returns mem_per_proc (int)
@@ -100,7 +119,7 @@ class Orca():
             mem_mb = float(mem.strip('MB'))
         else:  # assume GB
             mem_mb = float(mem) * 1000
-        
+
         # Calculate mem_per_proc
         mem_per_proc = int(mem_mb/nprocs)
 
@@ -108,7 +127,7 @@ class Orca():
         return mem_per_proc
 
     def __repr__(self):
-        return '<Orca Calculator>'
+        return f'<Orca Calculator {self.label}>'
 
     def load_conformer_attributes(self):
         """
@@ -119,32 +138,27 @@ class Orca():
         """
 
         # Assert AutoTST conformer is attached to Orca Calculator
-        assert self.conformer is not None,'Must provide an AutoTST conformer object'
-        assert isinstance(self.conformer,Conformer),'conformer must be an autotst conformer object'
-        
+        assert self.conformer is not None, 'Must provide an AutoTST conformer object'
+        assert isinstance(
+            self.conformer, Conformer), 'conformer must be an autotst conformer object'
+
         # Assign smiles or reaction label as label attribute
         if isinstance(self.conformer, TS):
-            self.label = self.conformer.reaction_label + "_orca"
+            self.label = self.conformer.reaction_label
         else:
-            self.label = self.conformer.smiles + "_orca"
+            self.label = self.conformer.smiles
 
-        # Replace problematic characters in temporary files and assign to base attribute
-        if '(' in self.label or '#' in self.label:
-            self.base = self.label.replace('(', '{').replace(')', '}').replace('#', '=-')
-        else:
-            self.base = self.label
-  
         self.charge = self.conformer.rmg_molecule.get_net_charge()
         self.mult = self.conformer.rmg_molecule.multiplicity
 
         try:
             self.coords = self.conformer.get_xyz_block()
         except:
-            logging.warning('could not get coordinates of conformer...setting coords to None')
+            logging.warning(
+                'could not get coordinates of conformer...setting coords to None')
             self.coords = None
 
-
-    def write_fod_input(self,directory=None):
+    def write_fod_input(self, directory=None):
         """
         Generates input files to run finite temperaure DFT to determine the Fractional Occupation number weighted Density (FOD number).
         Uses the default functional, basis set, and SmearTemp (TPSS, def2-TZVP, 5000 K) in Orca.
@@ -154,8 +168,8 @@ class Orca():
         """
 
         # Make sure we have required properties of conformer to run the job
-        assert None not in [self.mult,self.charge,self.coords]
-        
+        assert None not in [self.mult, self.charge, self.coords]
+
         # If directory is not specified, use the instance directory
         if directory is None:
             directory = self.directory
@@ -164,22 +178,24 @@ class Orca():
                 os.makedirs(directory)
 
         # Path for FOD input file
-        outfile = os.path.join(directory,self.label+'_fod.inp')
+        outfile = os.path.join(directory, self.label+'_fod.inp')
 
         # Write FOD input
         with open(outfile, 'w+') as f:
-            f.write('# FOD anaylsis for {} \n'.format(self.label))
+            f.write(f'# FOD anaylsis for {self.label} \n')
             f.write('! FOD \n')
             f.write('\n')
-            f.write('%pal nprocs {} end \n'.format(str(self.nprocs)))
+            f.write(f'%pal nprocs {self.nprocs} end \n')
             f.write('%scf\n  MaxIter  600\nend\n')
-            f.write('%base "{}_fod" \n'.format(self.base))
-            f.write('*xyz {} {}\n'.format(self.charge, self.mult))
+            f.write('%base "fod" \n')
+            f.write(f'*xyz {self.charge} {self.mult}\n')
             f.write(self.coords)
             f.write('*\n')
 
-    def write_sp_input(self, directory=None, nprocs=None, mem=None, method = 'ccsd(t)-f12', basis= 'cc-pvdz-f12', atom_basis = {'Br':'aug-cc-pvtz'}, use_atom_basis = False,
-                        scf_convergence = 'verytightscf', max_iter = '600'):
+        return self.label+'_fod.inp'
+
+    def write_sp_input(self, directory=None, nprocs=None, mem=None, method='ccsd(t)-f12', basis='cc-pvdz-f12',
+                       scf_convergence='verytightscf', max_iter='600', write_input = True):
         """
         A method to write single point energy calculation input files for ORCA.
         
@@ -190,17 +206,15 @@ class Orca():
         (instance mem will be used if not specified)
         :param method (str): calculation method to run.  Supported methods are (hf,ccsd(t),ccsd(t)-f12). Default is ccsd(t)-f12
         :param basis (str): basis set for calculation. Default is cc-pvdz-f12.
-        :param atom_basis (dict): A dictionary of atom, basis pairs for atom-specific basis sets.
-        :param use_atom_basis (T/F): If True, the atom-specific basis set in atom_basis dict will override the general basis set for that atom if the atom is in the molecule (default is False).
         :param scf_convergence : convergence option for scf. supported options are (normalscf,loosescf,sloppyscf,strongscf,tightscf,verytightscf,extremescf). Default is 'verytightscf'
         :param max_iter : maximum number of scf iterations to reach convergence criteria. (default is 600)
 
         Returns label for file_name
         """
-        
+
         # Make sure we have required properties of conformer to run the job
         assert None not in [self.mult, self.charge, self.coords]
-        
+
         self.mult = self.conformer.rmg_molecule.multiplicity
         self.charge = self.conformer.rmg_molecule.get_net_charge()
         self.coords = self.conformer.get_xyz_block()
@@ -208,7 +222,7 @@ class Orca():
         # Get mem_per_proc needed to write input
         if (mem or nprocs) is not None:
             if (mem and nprocs) is not None:
-                mem_per_proc = self.get_mem_per_proc(mem=mem,nprocs=nprocs)
+                mem_per_proc = self.get_mem_per_proc(mem=mem, nprocs=nprocs)
             elif nprocs is not None:
                 mem = self.mem
                 mem_per_proc = self.get_mem_per_proc(nprocs=nprocs)
@@ -233,16 +247,9 @@ class Orca():
         scf_convergence = scf_convergence.lower()
         max_iter = max_iter.lower()
 
-        # list of currently supported methods
-        suppported_methods = ['hf','ccsd(t)','ccsd(t)-f12']
-
-        # Assert method is supported
-        assert method in suppported_methods,'is appears {0} is not a supported method. Please select a method from {1}'.format(method,suppported_methods)
-        
         # Assert scf_convergence is supported
         scf_convergence_options = 'normalscf loosescf sloppyscf strongscf tightscf verytightscf extremescf'
         assert scf_convergence in scf_convergence_options
-
 
         # Select UHF for open-shell,
         # RHF for closed shell molecules
@@ -265,282 +272,104 @@ class Orca():
             'cc-pvtz-f12': 'CC-PVTZ-F12-CABS CC-PVQZ/C',
             'cc-pvqz-f12': 'CC-PVQZ-F12-CABS CC-PVQZ/C'}
 
-        # Get auxiliary basis sets 
+        # Get auxiliary basis sets
         if basis in auxiliary_basis_sets_dict.keys():
             aux_basis = auxiliary_basis_sets_dict.get(basis)
-            # if int(self.conformer.rmg_molecule.multiplicity) == 1 or 'hf' in method:
-            #     aux_basis = aux_basis.split(' ')[0]
         else:
             aux_basis = ''
 
-        # Get atom-specific basis sets if use_atom_basis is True
-        if use_atom_basis is True:
-            assert atom_basis is not None
-            assert isinstance(atom_basis,dict)
-            new_basis = ''
-            new_basis_strs = []
-            atom_symbols = [atom.lower() for atom in self.conformer.ase_molecule.get_chemical_symbols()]
-            for atom, b in atom_basis.iteritems():
-                if atom.lower() in atom_symbols:
-                    new_basis = new_basis + '{}={},'.format(atom.lower(), b)
-                    new_basis_strs.append('  newGTO {} "{}" end\n'.format(atom, b))
-        
-        # Use RI for open-shell (Orca only supprts RI-F12 methods for open-shell)
-        mp = "MP2-F12"
-        if method == 'ccsd(t)-f12' and int(self.mult) != 1:
-            method = 'ccsd(t)-f12/ri'
-            mp = "MP2-F12-RI"
-        
         # Create file name
-        if use_atom_basis is True and len(new_basis_strs) > 0:
-            file_name = self.label + '_' + method + '[' + str(basis) + ',' + str(new_basis)+ ']' + '.inp'
-        else:
-            file_name = self.label + '.inp'
-        if '/' in file_name:
-            file_name = file_name.replace('/','-')
-
-        # Create Label
-        label = file_name.strip('.inp')
+        file_name = f"{self.label}_{method}_{basis}.inp"
+        file_name = self.label + '.inp'
+        # Create label
+        # label = file_name.strip('.inp')
+        label = self.label
 
         # Create file path
-        file_path = os.path.join(directory,file_name)
+        file_path = os.path.join(directory, file_name)
 
-        # Create base for scratch files
-        base = self.base + '_' + method + '_' + basis
-        if use_atom_basis is True and len(new_basis_strs) > 0:
-            base = base + str(new_basis)
+        # Create base name for scratch files
+        base = method
         if '(' in base or '#' in base or '/' in base:
             base = base.replace('(', '{').replace(')', '}').replace('#', '=-').replace('/','-')
 
         # Write sp input
-        with open(file_path, 'w') as f:
-            f.write('# {0}/{1} calculation for {2} \n'.format(method,basis,self.label))
-            f.write('! {0} MP2-F12-RI cc-pVDZ-F12 cc-pVDZ-F12-CABS cc-pVTZ/C VeryTightSCF FrozenCore UNO UCO\n'.format(hf.upper()))
-            f.write('%pal nprocs {0} end\n'.format(nprocs))
-            f.write('%maxcore {0}\n'.format(mem_per_proc))
-            f.write('%scf\n  MaxIter  {0}\nend\n'.format(max_iter))
-            f.write('%base "mp2_dz"\n')
-            if use_atom_basis is True and len(new_basis_strs) > 0:
-                f.write('%basis\n')
-                f.writelines(new_basis_strs)
-                f.write('end\n')
-            f.write('*xyz {0} {1}\n'.format(self.charge, self.mult))
-            f.write(self.coords)
-            f.write('*\n')
-            f.write('\n')
-            f.write('$new_job\n')
-            f.write('\n')
-            f.write('! {0} MP2-F12-RI cc-pVTZ-F12 cc-pVTZ-F12-CABS cc-pVQZ/C VeryTightSCF FrozenCore UNO UCO\n'.format(hf.upper()))
-            f.write('%pal nprocs {0} end\n'.format(nprocs))
-            f.write('%maxcore {0}\n'.format(mem_per_proc))
-            f.write('%scf\n  MaxIter  {0}\nend\n'.format(max_iter))
-            f.write('%base "mp2_tz"\n')
-            if use_atom_basis is True and len(new_basis_strs) > 0:
-                f.write('%basis\n')
-                f.writelines(new_basis_strs)
-                f.write('end\n')
-            f.write('*xyz {0} {1}\n'.format(self.charge, self.mult))
-            f.write(self.coords)
-            f.write('*\n')
-            f.write('\n')
-            f.write('$new_job\n')
-            f.write('\n')
-            f.write('! {0} CCSD(T)-F12/RI cc-pVDZ-F12 cc-pVDZ-F12-CABS cc-pVTZ/C FrozenCore UNO UCO\n'.format(hf.upper()))
-            f.write('%pal nprocs {0} end \n'.format(nprocs))
-            f.write('%maxcore {0}\n'.format(mem_per_proc))
-            f.write('%mdci\n  MaxIter  {0}\nend\n'.format(max_iter))
-            f.write('%base "ccsdt_dz"\n')
-            if use_atom_basis is True and len(new_basis_strs) > 0:
-                f.write('%basis\n')
-                f.writelines(new_basis_strs)
-                f.write('end\n')
-            f.write('*xyz {0} {1}\n'.format(self.charge, self.mult))
-            f.write(self.coords)
-            f.write('*\n')
-        
+        if write_input is True:
+            with open(file_path, 'w') as f:
+                f.write(
+                    f'# {method}/{basis} calculation for {self.label}\n')
+                if "f12" in method:
+                    f.write(
+                        f'! {method}/RI {basis} {aux_basis} {scf_convergence} FrozenCore UNO UCO\n')
+                else:
+                    f.write(
+                        f'! {method} {basis} {aux_basis} {scf_convergence} FrozenCore UNO UCO\n')
+                f.write(f'%pal nprocs {nprocs} end \n')
+                f.write(f'%maxcore {mem_per_proc}\n')
+                f.write(f'%mdci\n  MaxIter  {max_iter}\nend\n')
+                f.write(f'%base "{base}"\n')
+                f.write(f'*xyz {self.charge} {self.mult}\n')
+                f.write(self.coords)
+                f.write('*\n')
+
+        # self.label = label
         return label
-    
-    def read_energy(self,path):
 
-        assert self.check_normal_termination(path)
+    def read_energy(self, path):
+        """
+        Returns the final single point energy (in Hartree) from an Orca calculation
+        Checks if the job terminated normally; if not, returns False
+        """
 
-        lines = open(path,'r').readlines()
-        SCF = None
-        MP2_F12 = []
-        CCSD_T_F12 = None
+        if self.check_normal_termination(path) is False:
+            logging.warning(f"It appears {path} orca calculation failed")
+            return False
+
+        lines = open(path, 'r').readlines()
         for line in lines:
-            if "HF basis set limit estimate" in line:
-                SCF = float(line.split()[-1].split('\n')[0])
-            if "MP2 basis set limit estimate" in line:
-                MP2_F12.append(float(line.split()[-1].split('\n')[0]))
-            if "Final correlation energy (with F12)" in line:
-                CCSD_T_F12 = float(line.split()[-1].split('\n')[0])
+            if "FINAL SINGLE POINT ENERGY" in line:
+                return float(line.split()[-1].split('\n')[0])
+        
 
-        energy = SCF + MP2_F12[-1] - MP2_F12[0] + CCSD_T_F12
-        return energy
-
-    def write_extrapolation_input(self, directory=None, nprocs=None, mem=None, option='EP3', basis_family='aug-cc', 
-                                scf_convergence='verytightscf', method='DLPNO-CCSD(T)', method_details='tightpno', 
-                                n=3, m=4):
+    def check_normal_termination(self, path):
         """
-        A method to write single point automated CBS extrapolation calculation input files for ORCA.
-        
-        :param directory (str): directory to write input file (instance directory will be used if not specified)
-        :param nprocs (str or int): number of processors to run the calculation on
-        (instance nprocs will be used if not specified)
-        :param mem (str or int): amount of memory requested (in GB or MB) to run the job.
-        (instance mem will be used if not specified)
-        :param option (str): Extraplotation technique to use.  Supported options are ('2','3','ep2','ep3'). See Orca manual for details.
-        :param basis_family (str): basis sets to use for calculation. Supported basis families are ('cc','aug-cc', 'cc-core', 'ano', 'saug-ano', 'aug-ano', 'def2'). Default is aug-cc.
-        :param scf_convergence : convergence option for scf. supported options are (normalscf,loosescf,sloppyscf,strongscf,tightscf,verytightscf,extremescf). Default is 'verytightscf'
-        :param method: A method to use for single point calculations. See Orca manual for supported methods. Default is DLPNO-CCSD(T).
-        :param method_details (str): Additional details for method. Default is tightpno.
-        :param n (int): Cardinal number of smaller basis set (ex. cc-pvtz = 3)
-        :param m (int): Cardinal number of larger basis set (ex. cc-pvqz = 4)
-
-        Returns label for file_name
-        """
-
-        # Get mem_per_proc needed to write input
-        if (mem or nprocs) is not None:
-            if (mem and nprocs) is not None:
-                mem_per_proc = self.get_mem_per_proc(mem=mem, nprocs=nprocs)
-            elif nprocs is not None:
-                mem = self.mem
-                mem_per_proc = self.get_mem_per_proc(nprocs=nprocs)
-            else:
-                nprocs = self.nprocs
-                mem_per_proc = self.get_mem_per_proc(mem=mem)
-        else:
-            mem_per_proc = self.mem_per_proc
-            mem = self.mem
-            nprocs = self.nprocs
-
-        # if directory is not specified,
-        # Use Orca instance directory
-        if directory is None:
-            directory = self.directory
-        if not os.path.exists(directory):
-            os.makedirs(directory)
-        
-        # Convert paramters to lowercase strings
-        option = str(option).lower()
-        basis_family = basis_family.lower()
-        method = method.lower()
-        scf_convergence= scf_convergence.lower()
-        mem = mem.lower()
-        
-        # Asset scf_convergence is supported
-        scf_convergence_options = 'normalscf loosescf sloppyscf strongscf tightscf verytightscf extremescf'
-        assert scf_convergence in scf_convergence_options
-
-        # if 2 or ep2 option and m is None, m=4
-        assert option in ['2','3','ep2','ep3']
-        if option in ['2', 'ep2']:
-            if m is None:
-                m = 4
-        if option in ['ep2','ep3']:
-            assert method in ['dlpno-ccsd(t)','mp2']        
-
-        if n is None:
-            n = 3
-        else:
-            n = int(n)
-
-        if m is not None:
-            m = int(m)
-            assert m == n+1
-
-        # Assert basis set familt is in supported families
-        assert basis_family in ['cc','aug-cc', 'cc-core', 'ano', 'saug-ano', 'aug-ano', 'def2']
-        
-        if int(self.mult) == 1:
-            hf = 'rhf'
-        else:
-            hf = 'uhf'
-
-        if option in ['2','ep2']:
-            file_name = self.label + '_' + method + '-extrapolate-' + option + '{' + str(basis_family) + '}' + str(n)+'/'+str(m) + '.inp'
-        else:
-            file_name = self.label + '_' + method + '-extrapolate-' + option + '{' + str(basis_family) + '}' + str(n) + '.inp'
-
-        if '/' in file_name:
-            file_name = file_name.replace('/', '-')
-
-        label = file_name.strip('.inp')
-
-        file_path = os.path.join(directory, file_name)
-
-        base = self.base + method + '_extrapolate_' + option + basis_family 
-        if '(' in base or '#' in base or '/' in base:
-            base = base.replace('(', '{').replace(')', '}').replace(
-                '#', '=-').replace('/', '-')
-
-        with open(file_path, 'w+') as f:
-            f.write('# {0}/{1} extrapolation {2} for {3} \n'.format(method, basis_family, option,self.label))
-            if option == 'ep3':
-                f.write('! {0} Extrapolate{1}({2},{3},{4}) {5}'.format(
-                    hf.upper(),option.upper(),basis_family,method,method_details,scf_convergence)
-                )
-            elif option == 'ep2':
-                f.write('! {0} Extrapolate{1}({2}/{3},{4},{5},{6}) {7}'.format(
-                    hf.upper(),option.upper(),n,m,basis_family,method,method_details,scf_convergence)
-                )
-            elif option == '2':
-                f.write('! {0} {1} AutoAux Extrapolate({2}/{3},{4}) {5}'.format(
-                    hf.upper(),method.upper(),n,m,basis_family,scf_convergence)
-                )
-            elif option == '3':
-                f.write('! {0} {1} AutoAux Extrapolate({2},{3}) {4}'.format(
-                    hf.upper(),method.upper(),n,basis_family,scf_convergence)
-                )
-            f.write('\n')
-            f.write('%pal nprocs {0} end \n'.format(nprocs))
-            f.write('%maxcore {0}\n'.format(mem_per_proc))
-            f.write('%base "{0}" \n'.format(base))
-            f.write('*xyz {0} {1}\n'.format(self.charge, self.mult))
-            f.write(self.coords)
-            f.write('*\n')
-
-        return label
-
-    def check_normal_termination(self,path):
-        """
-        checks if an Orca job terminated normally.
+        Checks if an Orca job terminated normally.
         Returns True is normal termination and False if something went wrong.
         """
-        assert os.path.exists(path), 'It seems {} is not a valid path'.format(path)
+        assert os.path.exists(
+            path), 'It seems {} is not a valid path'.format(path)
 
-        lines = open(path,'r').readlines()[-5:]
+        lines = open(path, 'r').readlines()[-5:]
         complete = False
         for line in lines:
             if "ORCA TERMINATED NORMALLY" in line:
                 complete = True
                 break
         if complete is True:
-            logging.info("{} completed successfully".format(path))
+            logging.info(f"{path} completed successfully")
         else:
-            logging.info("{} failed".format(path))
+            logging.info(f"{path} failed")
         return complete
-        
-    def read_fod_log(self,path):
+
+    def read_fod_log(self, path):
         """
         Reads an FOD log to get the FOD number.
         Returns FOD number if log terminated normally and FOD number can be found.
         """
-        assert os.path.exists(path),'It seems {} is not a valid path'.format(path)
+        assert os.path.exists(path),f'It seems {path} is not a valid path'
 
         if self.check_normal_termination(path):
             N_FOD = None
-            for line in open(path,'r').readlines():
+            for line in open(path, 'r').readlines():
                 if 'N_FOD =' in line:
                     N_FOD = float(line.split(" ")[-1])
                     break
             if N_FOD:
-                logging.info("the FOD number is {}".format(N_FOD))
+                logging.info(f"the FOD number is {N_FOD}")
                 return N_FOD
             else:
-                logging.info("It appears that the orca terminated normally for {}, but we couldn't find the FOD number".format(path))
+                logging.info(
+                    f"It appears that the orca terminated normally for {path}, but we couldn't find the FOD number")
         else:
-            logging.info('It appears the orca FOD job for {} did not terminate normally'.format(path))
-            
+            logging.info(
+                f'It appears the orca FOD job for {path} did not terminate normally')

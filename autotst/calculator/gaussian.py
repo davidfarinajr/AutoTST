@@ -53,6 +53,31 @@ from rmgpy.molecule import Bond
 from shutil import move
 import yaml
 
+def get_HF_ZPE(path):
+
+    lines = open(path,'r').readlines()
+    HF_GFHFB1 = HF_GFHFB2 = HF_GFHFB1_job = HF_GFHFB2_job = None
+    for l in lines: 
+        if "HF/GFHFB1" in l and HF_GFHFB1 is None: 
+            HF_GFHFB1_job = True 
+        if HF_GFHFB1_job is True and HF_GFHFB1 is None: 
+            if "SCF Done" in l: 
+                HF_GFHFB1 = float(l.split('=')[1].split()[0]) 
+                HF_GFHFB1_job = False 
+        if "HF/GFHFB2" in l and HF_GFHFB2 is None: 
+            HF_GFHFB2_job = True 
+        if HF_GFHFB2_job is True and HF_GFHFB2 is None:  
+            if "SCF Done" in l:  
+                HF_GFHFB2 = float(l.split('=')[1].split()[0])  
+                HF_GFHFB2_job = False 
+        if "E(ZPE)=" in l:
+            ZPE = float(l.split()[1])
+            break
+    
+    alpha = 1.63
+    HF = (HF_GFHFB2 -  HF_GFHFB1 * np.exp(-alpha)) / (1 - np.exp(-alpha))
+    return HF
+
 def read_log(file_path):
         """
         A helper method that allows one to easily parse log files
@@ -383,35 +408,41 @@ class Gaussian():
         - calc (ASEGaussian): an ASEGaussian calculator with all of the proper setting specified
         """
 
-        if self.settings["sp"] == 'G4':
-            self.settings["method"] = "B3LYP"
-            self.settings["basis"] = "6-31G(2df,p)"
-            self.settings["dispersion"] = None
+        # if self.settings["sp"] == 'G4' or self.settings["sp"] == 'orca':
+        #     self.settings["method"] = "B3LYP"
+        #     #self.settings["basis"] = "6-31G(2df,p)"
+        #     self.settings["basis"] = 'jun-cc-pvtz'
+        #     self.settings["dispersion"] = None
 
         convergence = self.settings["convergence"].upper()
 
-        self.settings["mem"] = '10GB'
+        self.settings["mem"] = '30GB'
+        parition = 'short'
         num_atoms = self.conformer.rmg_molecule.get_num_atoms() - self.conformer.rmg_molecule.get_num_atoms('H')
 
-        if num_atoms <= 2:
-            self.settings["nprocshared"] = 2
-            self.settings["time"] = '12:00:00'
-        elif num_atoms <= 4:
-            self.settings["mem"] = '20GB'
-            self.settings["nprocshared"] = 6
-            self.settings["time"] = '12:00:00'
+        if num_atoms < 4:
+            self.settings["nprocshared"] = 56
+            time = '1:00:00'
+            parition = 'express'
+        # elif num_atoms <= 4:
+        #     self.settings["mem"] = '20GB'
+        #     self.settings["nprocshared"] = 6
+        #     self.settings["time"] = '12:00:00'
         elif num_atoms <= 10:
-            self.settings["mem"] = '30GB'
-            self.settings["nprocshared"] = 8
-            self.settings["time"] = '12:00:00'
-        elif num_atoms <= 20:
-            self.settings["mem"] = '40GB'
-            self.settings["nprocshared"] = 12
-            self.settings["time"] = '12:00:00'
-        else:
             self.settings["mem"] = '50GB'
-            self.settings["nprocshared"] = 12
-            self.settings["time"] = '12:00:00'
+            self.settings["nprocshared"] = 28
+            parition = 'short'
+            time = '24:00:00'
+        elif num_atoms <= 20:
+            self.settings["mem"] = '60GB'
+            self.settings["nprocshared"] = 28
+            parition = 'short'
+            time = '24:00:00'
+        else:
+            self.settings["mem"] = '60GB'
+            self.settings["nprocshared"] = 28
+            time = '24:00:00'
+            parition = 'short'
 
         
         torsion = self.conformer.torsions[torsion_index]
@@ -442,10 +473,10 @@ class Gaussian():
             conformer_type = "species"
             extra = "Opt=(CalcFC,ModRedun,{})".format(convergence)
 
-        for locked_torsion in self.conformer.torsions:  # TODO: maybe doesn't work;
-            if sorted(locked_torsion.atom_indices) != sorted(torsion.atom_indices):
-                a, b, c, d = locked_torsion.atom_indices
-                addsec += 'D {0} {1} {2} {3} F\n'.format(a+1, b+1, c+1, d+1)
+        # for locked_torsion in self.conformer.torsions:  # TODO: maybe doesn't work;
+        #     if sorted(locked_torsion.atom_indices) != sorted(torsion.atom_indices):
+        #         a, b, c, d = locked_torsion.atom_indices
+        #         addsec += 'D {0} {1} {2} {3} F\n'.format(a+1, b+1, c+1, d+1)
 
         # self.conformer.rmg_molecule.update_multiplicity()
         mult = self.conformer.rmg_molecule.multiplicity
@@ -472,8 +503,8 @@ class Gaussian():
         ase_gaussian.atoms = self.conformer.ase_molecule
         ase_gaussian.directory = new_scratch
         ase_gaussian.label = label
-        ase_gaussian.parameters["partition"] = self.settings["partition"]
-        ase_gaussian.parameters["time"] = self.settings["time"]
+        ase_gaussian.parameters["partition"] = parition
+        ase_gaussian.parameters["time"] = time
         del ase_gaussian.parameters['force']
         return ase_gaussian
 
@@ -500,29 +531,25 @@ class Gaussian():
             dispersion = ''
 
         convergence = self.settings["convergence"].upper()
-
+        self.settings["partition"] = 'short'
+        self.settings["time"] = '12:00:00'
         num_atoms = self.conformer.rmg_molecule.get_num_atoms() - self.conformer.rmg_molecule.get_num_atoms('H')
         
         if num_atoms <= 2:
-            self.settings["nprocshared"] = 1
+            self.settings["nprocshared"] = 4
             self.settings["mem"] = '10GB'
-            self.settings["time"] = '24:00:00'
         elif num_atoms <= 4:
             self.settings["mem"] = '30GB'
-            self.settings["nprocshared"] = 3
-            self.settings["time"] = '24:00:00'
+            self.settings["nprocshared"] = 4
         elif num_atoms <= 6:
             self.settings["mem"] = '40GB'
-            self.settings["nprocshared"] = 6
-            self.settings["time"] = '24:00:00'
+            self.settings["nprocshared"] = 8
         elif num_atoms <= 8:
             self.settings["mem"] = '50GB'
-            self.settings["nprocshared"] = 8
-            self.settings["time"] = '24:00:00'
+            self.settings["nprocshared"] = 12
         else:
             self.settings["mem"] = '50GB'
-            self.settings["nprocshared"] = 10
-            self.settings["time"] = '24:00:00'
+            self.settings["nprocshared"] = 12
 
         if isinstance(self.conformer, TS):
             logging.info(
@@ -535,6 +562,7 @@ class Gaussian():
         #self.conformer.rmg_molecule.update_multiplicity()
 
         label = "{}_{}_{}".format(self.conformer.smiles, self.conformer.index, self.opt_method)
+        #label = "{}_{}".format(self.conformer.smiles, self.conformer.index)
 
         if all([opt, freq]):
             label += '_optfreq'
@@ -612,10 +640,10 @@ class Gaussian():
             self.settings["mem"] = '15GB'
             self.settings["nprocshared"] = 6
         elif num_atoms <= 15:
-            self.settings["mem"] = '20GB'
+            self.settings["mem"] = '40GB'
             self.settings["nprocshared"] = 8
         elif num_atoms <= 20:
-            self.settings["mem"] = '30GB'
+            self.settings["mem"] = '40GB'
             self.settings["nprocshared"] = 8
         else:
             self.settings["mem"] = '40GB'
@@ -732,6 +760,7 @@ class Gaussian():
         assert method in gaussian_methods
 
         self.settings["time"] = "24:00:00"
+        self.settings["partition"] = 'short'
         num_atoms = self.conformer.rmg_molecule.get_num_atoms() - self.conformer.rmg_molecule.get_num_atoms('H')
         
         if num_atoms <= 6:
@@ -742,12 +771,12 @@ class Gaussian():
             self.settings["nprocshared"] = 16
         elif num_atoms <= 10:
             self.settings["mem"] = '250GB'
-            self.settings["nprocshared"] = 20
+            self.settings["nprocshared"] = 28
         elif num_atoms <= 12:
-            self.settings["mem"] = '380GB'
-            self.settings["nprocshared"] = 16
+            self.settings["mem"] = '250GB'
+            self.settings["nprocshared"] = 28
         else:
-            self.settings["mem"] = '500GB'
+            self.settings["mem"] = '250GB'
             self.settings["nprocshared"] = 28
 
         

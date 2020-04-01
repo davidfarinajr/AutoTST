@@ -127,8 +127,8 @@ class Arkane_Input():
 
         with open(path,'w') as f:
             f.write('#SMILES = {}\n'.format(self.conformer.rmg_molecule.smiles))
-            f.write('linear = {}\n'.format(linear))
-            f.write('externalSymmetry = {}\n'.format(sym_num))
+            # f.write('linear = {}\n'.format(linear))
+            # f.write('externalSymmetry = {}\n'.format(sym_num))
             f.write('spinMultiplicity = {}\n'.format(mult))
             f.write('opticalIsomers = 1\n')
             f.write('geometry = GaussianLog("{}")\n'.format(geometry_path))
@@ -152,13 +152,13 @@ class Arkane_Input():
         return path
 
     def write_arkane_input(self, frequency_scale_factor=None, useIsodesmicReactions=False, useAtomCorrections=False, useBondCorrections=False,
-                            useHinderedRotors=False, constraint_classes=None, n_reactions_max = 50, 
+                            useHinderedRotors=False, constraint_classes=None, n_reactions_max = 10, 
                             max_ref_uncertainty = None, deviation_coeff = 3.0):
         
         molecule_file_path = os.path.join(
             self.directory, self.conformer.rmg_molecule.smiles + '.py')
-        if not os.path.exists(molecule_file_path):
-            molecule_file_path = self.write_molecule_file()
+        # if not os.path.exists(molecule_file_path):
+        molecule_file_path = self.write_molecule_file()
         
         arkane_input_path = os.path.join(self.directory,'arkane_input' +'.py')
     

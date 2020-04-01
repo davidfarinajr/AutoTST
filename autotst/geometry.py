@@ -5,7 +5,8 @@
 #
 #   AutoTST - Automated Transition State Theory
 #
-#   Copyright (c) 2015-2018 Prof. Richard H. West (r.west@northeastern.edu)
+#   Copyright (c) 2015-2020 Richard H. West (r.west@northeastern.edu)
+#   and the AutoTST Team
 #
 #   Permission is hereby granted, free of charge, to any person obtaining a
 #   copy of this software and associated documentation files (the 'Software'),
@@ -49,7 +50,7 @@ class Bond:
         self.mask = mask
 
     def __repr__(self):
-        return '<Bond "{}">'.format(self.atom_indices)
+        return f'<Bond "{self.atom_indices}">'
 
 
 class Angle():
@@ -79,7 +80,7 @@ class Angle():
         self.reaction_center = reaction_center
 
     def __repr__(self):
-        return '<Angle "{0}">'.format(self.atom_indices)
+        return f'<Angle "{self.atom_indices}">'
 
 
 class Torsion():
@@ -97,19 +98,25 @@ class Torsion():
 
     def __init__(
             self,
-            index,
             atom_indices,
             dihedral,
-            mask,
-            reaction_center=False):
-        self.index = index
+            index = -1,
+            mask = [],
+            center_atoms = [],
+            description = 'hindered',
+            reaction_center = False
+            ):
+
         self.atom_indices = atom_indices
         self.dihedral = dihedral
+        self.index = index
         self.mask = mask
+        self.center_atoms = center_atoms
+        self.description = description.lower()
         self.reaction_center = reaction_center
-
+        
     def __repr__(self):
-        return '<Torsion "{0}">'.format(self.atom_indices)
+        return f'<Torsion "{self.atom_indices}">'
 
 
 class CisTrans():
@@ -142,7 +149,7 @@ class CisTrans():
         self.reaction_center = reaction_center
 
     def __repr__(self):
-        return '<CisTrans "{0} - {1}">'.format(self.atom_indices, self.stero)
+        return f'<CisTrans "{self.atom_indices} - {self.stero}">'
 
 
 class ChiralCenter():
@@ -161,5 +168,4 @@ class ChiralCenter():
         self.chirality = chirality
 
     def __repr__(self):
-        return '<ChiralCenter "{0} - {1}">'.format(
-            self.atom_index, self.chirality)
+        return f'<ChiralCenter "{self.atom_index} - {self.chirality}">'
