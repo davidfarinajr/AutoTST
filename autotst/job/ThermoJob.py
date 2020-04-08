@@ -82,7 +82,9 @@ def check_isomorphic(conformer,log_path):
     to the SMILES of the passed in 'conformer'
     """
     starting_molecule = RMGMolecule(smiles=conformer.smiles)
+    starting_molecule_rmg = conformer.rmg_molecule.to_single_bonds()
     starting_molecule = starting_molecule.to_single_bonds()
+
 
     atoms = read_log(log_path)
 
@@ -94,6 +96,10 @@ def check_isomorphic(conformer,log_path):
     if not starting_molecule.is_isomorphic(test_molecule):
         logging.info(
             "Output geometry of {} is not isomorphic with input geometry".format(log_path))
+        return False
+    if not starting_molecule_rmg.is_isomorphic(test_molecule):
+        logging.info(
+            "Output geometry of {} is not isomorphic with conformer rmg mol".format(log_path))
         return False
     else:
         logging.info(
@@ -209,10 +215,10 @@ class ThermoJob():
         if restart or not attempted:
             if restart:
                 logging.info(
-                    "Restarting calculations for {}.".format(conformer)
+                    "Restarting calculations for {}.".format(label)
                 )
             else:
-                logging.info("Starting calculations for {}".format(conformer))
+                logging.info("Starting calculations for {}".format(label))
             try:
                 output = subprocess.check_output(
                     """sbatch --job-name="{0}" --output="{0}.log" --error="{0}.slurm.log" -p {1} -N 1 -n {2} -t {3} --mem={4} -A {5} $AUTOTST/autotst/job/submit.sh""".format(
@@ -270,7 +276,7 @@ class ThermoJob():
                 "It seems that the file never completed for {} completed, running it again".format(calc.label))
             calc.parameters["time"] = "24:00:00"
             calc.parameters["mem"] = "60GB"
-            calc.parameters["nprocshared"] = 8
+            calc.parameters["nprocshared"] = 14
             calc.parameters["partition"] = "short"
             label = self._submit_conformer(conformer,calc,restart=True)
             time.sleep(5)
@@ -288,7 +294,7 @@ class ThermoJob():
                 "It appears that {} was killed prematurely".format(calc.label))
             calc.parameters["time"] = "24:00:00"
             calc.parameters["mem"] = "60GB"
-            calc.parameters["nprocshared"] = 8
+            calc.parameters["nprocshared"] = 14
             calc.parameters["partition"] = "short"
             label = self._submit_conformer(conformer,calc, restart=True)
             time.sleep(5)
@@ -623,6 +629,7 @@ class ThermoJob():
             restart = True
         complete = {}
         calculators = {}
+        recalc = {}
         verified = {}
         retried = {}
         if len(conformer.torsions) == 0:
@@ -638,6 +645,7 @@ class ThermoJob():
             complete[(torsion.index,label)] = False
             verified[label] = False
             retried[label] = False
+            recalc[label] = False
             time.sleep(5)
 
         done = False
@@ -649,6 +657,9 @@ class ThermoJob():
                 if not check_complete(label,self.discovery_username):
                     time.sleep(60)
                     continue
+                if all(complete.values()):
+                    done = True
+                    break
                 if done:
                     continue
                 if complete[(index,label)] is True:
@@ -658,21 +669,26 @@ class ThermoJob():
                 self.directory, "species", self.method_name,conformer.smiles, "rotors", label + ".log")
 
                 completed, converged = self.calculator.verify_output_file(file_name)
-                if not all([completed, converged]):
+                if not all([completed, converged]) and recalc[label] is False:
                     ase_calculator = self.calculator.get_rotor_calc(index, steps, step_size)
                     ase_calculator.parameters["partition"] = "short"
                     ase_calculator.parameters["time"] = "24:00:00"
                     logging.info(f"resubmitting {label}")
                     self._submit_conformer(conformer, ase_calculator, restart=True)
+                    recalc[label] = True
                     time.sleep(5)
                     continue
-
+                elif not all([completed, converged]) and recalc[label] is True:
+                    logging.info(f"Rotor Scan {label} failed second attempt")
+                    complete[(index,label)] = True
+                    verified[label] = False
+                    continue
 
                 lowest_conf, continuous, atoms = self.verify_rotor(
                     conformer, label, steps, step_size)
 
                 if continuous is False and retried[label] is False:
-                    logging.info("Rotor Scan is not continuous, resubmitting with Jun-CC-PVTZ basis set")
+                    logging.info(f"Rotor Scan {label} is not continuous, resubmitting with Jun-CC-PVTZ basis set")
                     self.calculator.settings["basis"] = 'jun-cc-pvtz'
                     ase_calculator = self.calculator.get_rotor_calc(index, steps, step_size)
                     ase_calculator.parameters["partition"] = "short"
@@ -756,6 +772,7 @@ class ThermoJob():
             conformer._ase_molecule = atoms
             conformer.update_coords_from("ase")
             conformer.rmg_molecule.multiplicity = mult
+            conformer.get_torsions()
             self.calculator.conformer = conformer
             self.calculator.settings["method"] = "B3LYP"
             self.calculator.settings["basis"] = "6-31G(2df,p)"
@@ -863,10 +880,10 @@ class ThermoJob():
         if continuous is True:
             logging.info("Rotor scan {} is continuous".format(label))
 
-        try:
-            lowest_conf,atoms = self.check_rotor_lowest_conf(parser=parser)
-        except:
-            return (False,False,False)
+        #try:
+        lowest_conf,atoms = self.check_rotor_lowest_conf(parser=parser)
+        #except:
+         #   return (False,False,False)
         # [lowest_conf, energy, atomnos,
         #     atomcoords] = self.check_rotor_lowest_conf(parser=parser)
         #opt_count_check = self.check_rotor_opts(steps, parser=parser)
@@ -918,7 +935,16 @@ class ThermoJob():
 
         opt_indices = [i for i, status in enumerate(
             parser.optstatus) if status in [2, 4, 5]]
-        opt_SCFEnergies = [parser.scfenergies[index] for index in opt_indices]
+        # opt_SCFEnergies = [parser.scfenergies[index] for index in opt_indices]
+        opt_SCFEnergies = [parser.scfenergies[i] for i,status in enumerate(parser.optstatus) if
+                            status in (2,4,5)]
+
+        starting_energy, final_energy = (opt_SCFEnergies[0],opt_SCFEnergies[-1])
+        minimum_energy = min(opt_SCFEnergies)
+
+        if abs(starting_energy - final_energy) > 0.0207: #2 kJ/mol:
+            logging.info("Rotor scan failed since starting energy is not within tolerance of final energy")
+            return False
 
         max_energy = max(opt_SCFEnergies)
         min_energy = min(opt_SCFEnergies)
@@ -971,9 +997,9 @@ class ThermoJob():
         starting_energy, final_energy = (energies[0],energies[-1])
         minimum_energy = min(energies)
 
-        if abs(starting_energy - final_energy) > tol:
-            logging.info("Rotor scan failed since starting energy is not within tolerance of final energy")
-            assert False
+        # if abs(starting_energy - final_energy) > tol:
+        #     logging.info("Rotor scan failed since starting energy is not within tolerance of final energy")
+        #     assert False
 
         if abs(minimum_energy - min(starting_energy, final_energy)) > tol:
             logging.info("A lower energy conformer was found during rotor scan")
@@ -1126,6 +1152,7 @@ class ThermoJob():
                           options = {
                             "optimize" : True,
                             "rotors" : True,
+                            "run_rotors" : True,
                             "run_sp" : True,
                             "recalculate" : False,
                             "calculate_fod" : False,
@@ -1341,7 +1368,7 @@ class ThermoJob():
                     try:
                         spcs = RMGSpecies().from_smiles(smiles)
                         spcs.generate_resonance_structures(
-                            keep_isomorphic=False)
+                            keep_isomorphic=True)
                         hlci = HLCI(spcs)
                         index = hlci.w.index(max(hlci.w))
                         mol = HLCI(spcs).species.molecule[index]
@@ -1350,10 +1377,17 @@ class ThermoJob():
                         logging.info(
                             "Could not determine best Lewis struture for species {}...using {} for structure".format(self.species,mol.smiles))
 
-                logging.info("the best smiles for {} is {}".format(
-                    self.species, mol.smiles))
-                best_smiles = mol.smiles
-                self.rmg_mol = mol
+                # if mol.smiles not in self.species.smiles:
+                #     logging.warning(f"{mol.smiles} if not in {self.species.smiles}")
+                # new_mol = RMGMolecule(smiles=mol.smiles).to_single_bonds()
+                # old_mol = RMGMolecule(smiles=self.species.smiles[0]).to_single_bonds()
+                # assert new_mol.is_isomorphic(mol.to_single_bonds())
+                # assert new_mol.is_isomorphic(old_mol)
+
+                # logging.info("the best smiles for {} is {}".format(
+                #     self.species, mol.smiles))
+                # best_smiles = mol.smiles
+                # self.rmg_mol = mol
 
             else:
                 logging.info(
@@ -1386,7 +1420,7 @@ class ThermoJob():
                     try:
                         spcs = RMGSpecies().from_smiles(smiles)
                         spcs.generate_resonance_structures(
-                            keep_isomorphic=False)
+                            keep_isomorphic=True)
                         hlci = HLCI(spcs)
                         index = hlci.w.index(max(hlci.w))
                         mol = HLCI(spcs).species.molecule[index]
@@ -1395,10 +1429,18 @@ class ThermoJob():
                         logging.info(
                             "Could not determine best Lewis struture for species {}...using {} for structure".format(self.species, mol.smiles))
 
-                logging.info("the best smiles for {} is {}".format(
-                    self.species, mol.smiles))
-                best_smiles = mol.smiles
-                self.rmg_mol = mol
+            if mol.smiles not in self.species.smiles:
+                logging.warning(f"{mol.smiles} is not in {self.species.smiles}")
+            new_mol = RMGMolecule(smiles=mol.smiles).to_single_bonds()
+            old_mol = RMGMolecule(smiles=self.species.smiles[0]).to_single_bonds()
+            assert new_mol.is_isomorphic(mol.to_single_bonds())
+            assert new_mol.is_isomorphic(old_mol)
+
+            logging.info("the best smiles for {} is {}".format(
+                self.species, mol.smiles))
+            best_smiles = mol.smiles
+            self.rmg_mol = mol
+
         else:
             best_smiles = smiles
             self.rmg_mol =  self.species.rmg_species[0]
@@ -1598,14 +1640,16 @@ class ThermoJob():
             conformer._ase_molecule = atoms
             conformer.update_coords_from("ase")
             conformer.rmg_molecule.multiplicity = mult
+            conformer.get_torsions()
             #self.torsion_conformer = conformer.copy()
             self.torsion_conformer = conformer
             self.calculator.conformer = conformer
             self.calculator.settings["method"] = "B3LYP"
             self.calculator.settings["basis"] = "6-31G(2df,p)"
             self.calculator.settings["dispersion"] = None
-            self.calculate_rotors(
-                conformer, steps=36, step_size=10.0)
+            if options["run_rotors"] is True:
+                self.calculate_rotors(
+                    conformer, steps=36, step_size=10.0)
 
 
         if options['run_arkane_sp']:
@@ -1640,7 +1684,7 @@ class ThermoJob():
 
             for sp_method in single_point_methods:
 
-                label = smiles + '_' + sp_method
+                label = smiles + '_' + sp_method.upper()
                 freq_label = smiles + '_' + 'B3LYP' + '_freq'
                 #freq_label = smiles + '_' + 'B3LYP' + '_freq2'
                 sp_dir = os.path.join(self.directory,"species",method_name,smiles,"sp")
@@ -1679,10 +1723,10 @@ class ThermoJob():
                 if self.torsion_conformer is not None:
                     conf = self.torsion_conformer
                     logging.info(conf.torsions)
-                    assert check_isomorphic(conf,log_path)
+                    assert check_isomorphic(conf,freq_path)
                 else:
                     conf = Conformer(smiles=self.rmg_mol.smiles)
-                    assert check_isomorphic(conf,log_path)
+                    assert check_isomorphic(conf,freq_path)
                     dft_label =  "{}_{}_optfreq".format(smiles,self.method_name)
                     dft_log = os.path.join(self.directory,"species",method_name,smiles,dft_label+".log")
                     mult = ccread(dft_log,loglevel=logging.ERROR).mult
