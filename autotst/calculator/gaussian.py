@@ -420,7 +420,7 @@ class Gaussian():
         parition = 'short'
         num_atoms = self.conformer.rmg_molecule.get_num_atoms() - self.conformer.rmg_molecule.get_num_atoms('H')
 
-        if num_atoms < 4:
+        if num_atoms <= 4:
             self.settings["nprocshared"] = 56
             time = '1:00:00'
             parition = 'express'
@@ -536,20 +536,26 @@ class Gaussian():
         num_atoms = self.conformer.rmg_molecule.get_num_atoms() - self.conformer.rmg_molecule.get_num_atoms('H')
         
         if num_atoms <= 2:
-            self.settings["nprocshared"] = 4
+            self.settings["nprocshared"] = 14
             self.settings["mem"] = '10GB'
+            self.settings["time"] = '1:00:00'
+            self.settings["partition"] = 'express'
         elif num_atoms <= 4:
             self.settings["mem"] = '30GB'
-            self.settings["nprocshared"] = 4
+            self.settings["nprocshared"] = 28
+            self.settings["time"] = '1:00:00'
+            self.settings["partition"] = 'express'
         elif num_atoms <= 6:
             self.settings["mem"] = '40GB'
-            self.settings["nprocshared"] = 8
+            self.settings["nprocshared"] = 56
+            self.settings["time"] = '1:00:00'
+            self.settings["partition"] = 'express'
         elif num_atoms <= 8:
             self.settings["mem"] = '50GB'
-            self.settings["nprocshared"] = 12
+            self.settings["nprocshared"] = 14
         else:
             self.settings["mem"] = '50GB'
-            self.settings["nprocshared"] = 12
+            self.settings["nprocshared"] = 14
 
         if isinstance(self.conformer, TS):
             logging.info(
@@ -637,7 +643,7 @@ class Gaussian():
         if num_atoms <= 4:
             self.settings["nprocshared"] = 4
         elif num_atoms <= 8:
-            self.settings["mem"] = '15GB'
+            self.settings["mem"] = '20GB'
             self.settings["nprocshared"] = 6
         elif num_atoms <= 15:
             self.settings["mem"] = '40GB'
@@ -706,10 +712,10 @@ class Gaussian():
         num_atoms = self.conformer.rmg_molecule.get_num_atoms()
 
         if num_atoms <= 4:
-            self.settings["nprocshared"] = 1
+            self.settings["nprocshared"] = 2
             self.settings["time"] = '1:00:00'
         elif num_atoms <= 10:
-            self.settings["nprocshared"] = 2
+            self.settings["nprocshared"] = 4
             self.settings["time"] = '1:00:00'
         else:
             self.settings["nprocshared"] = 4
@@ -765,10 +771,14 @@ class Gaussian():
         
         if num_atoms <= 6:
             self.settings["mem"] = '120GB'
-            self.settings["nprocshared"] = 12
+            self.settings["nprocshared"] = 56
+            self.settings["partition"] = 'express'
+            self.settings["time"] = "1:00:00"
         elif num_atoms <= 8:
             self.settings["mem"] = '180GB'
-            self.settings["nprocshared"] = 16
+            self.settings["nprocshared"] = 56
+            self.settings["partition"] = 'express'
+            self.settings["time"] = "1:00:00"
         elif num_atoms <= 10:
             self.settings["mem"] = '250GB'
             self.settings["nprocshared"] = 28

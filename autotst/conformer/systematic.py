@@ -53,6 +53,8 @@ from autotst.conformer.utilities import get_energy, find_terminal_torsions
 from rmgpy.exceptions import AtomTypeError
 from rmgpy.molecule import Molecule
 
+from copy import copy
+
 def find_all_combos(
         conformer,
         delta=float(120),
@@ -310,7 +312,7 @@ def systematic_search(conformer,
             copy_conf.set_chirality(center.index, s_r)
 
         copy_conf.update_coords_from("ase")
-        copy_conf.ase_molecule.set_calculator(calc)
+        copy_conf.ase_molecule.set_calculator(copy(calc))
   
         conformers[index] = copy_conf
 
