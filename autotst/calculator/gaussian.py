@@ -392,7 +392,8 @@ class Gaussian():
     def get_rotor_calc(self,
                        torsion_index=0,
                        steps=36,
-                       step_size=10.0):
+                       step_size=10.0,
+                       freeze=False):
         """
         A method to create all of the calculators needed to perform hindered rotor calculations given a `Conformer` and a `Torsion`.
 
@@ -473,10 +474,11 @@ class Gaussian():
             conformer_type = "species"
             extra = "Opt=(CalcFC,ModRedun,{})".format(convergence)
 
-        # for locked_torsion in self.conformer.torsions:  # TODO: maybe doesn't work;
-        #     if sorted(locked_torsion.atom_indices) != sorted(torsion.atom_indices):
-        #         a, b, c, d = locked_torsion.atom_indices
-        #         addsec += 'D {0} {1} {2} {3} F\n'.format(a+1, b+1, c+1, d+1)
+        if freeze is True:
+            for locked_torsion in self.conformer.torsions:  # TODO: maybe doesn't work;
+                if sorted(locked_torsion.atom_indices) != sorted(torsion.atom_indices):
+                    a, b, c, d = locked_torsion.atom_indices
+                    addsec += 'D {0} {1} {2} {3} F\n'.format(a+1, b+1, c+1, d+1)
 
         # self.conformer.rmg_molecule.update_multiplicity()
         mult = self.conformer.rmg_molecule.multiplicity
