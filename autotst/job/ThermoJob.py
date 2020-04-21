@@ -8,6 +8,7 @@ from autotst.geometry import Bond, Angle, Torsion, CisTrans, ChiralCenter
 import cclib
 from cclib.io import ccread
 from rmgpy.molecule import Molecule as RMGMolecule
+from rmgpy.statmech.torsion import HinderedRotor
 from rmgpy.species import Species as RMGSpecies
 import rmgpy
 from ase.calculators.gaussian import Gaussian as ASEGaussian
@@ -636,33 +637,65 @@ class ThermoJob():
             logging.info("No torsions to run scans on.")
             return {}
 
+        torsion_label_dict = {}
         for torsion in conformer.torsions:
             ase_calculator = self.calculator.get_rotor_calc(
                 torsion.index, steps, step_size)
+            label = ase_calculator.label
+            torsion_label_dict[label] = torsion
+            failure_log = os.path.join(
+                self.directory, "species", self.method_name,conformer.smiles, "rotors", "failures", label + ".log")
+            if os.path.exists(failure_log):
+                logging.info(f"It seems {label} was already calculated and failed rotor scan")
+                complete[(torsion.index,label)] = True
+                verified[label] = False
+                recalc[label] = True
+                retried[label] = True
+                continue
+
             label = self._submit_conformer(
                 conformer, ase_calculator, restart)
+
+            input_file =  os.path.join(
+                self.directory, "species", self.method_name,conformer.smiles, "rotors", label + ".com")
+
+            x = False
+            if os.path.exists(input_file) and restart is False:
+                lines = open(input_file,'r').readlines()
+                for l in lines:
+                    if "jun-cc-pvtz" in l:
+                        x = True
+                        break
+            if x is True:
+                retried[label] = True
+            else:
+                retried[label] = False
+
             logging.info(label)
             complete[(torsion.index,label)] = False
             verified[label] = False
-            retried[label] = False
+            retried[label] = True
             recalc[label] = False
             time.sleep(5)
+            logging.info(retried)
 
         done = False
+        if len(complete) == 0:
+            done = True
         lowest_energy_label = None
         conformer_error = False
 
         while not done:
             for index,label in list(complete.keys()):
-                if not check_complete(label,self.discovery_username):
-                    time.sleep(60)
-                    continue
                 if all(complete.values()):
                     done = True
                     break
-                if done:
-                    continue
                 if complete[(index,label)] is True:
+                    continue
+                if not check_complete(label,self.discovery_username):
+                    time.sleep(60)
+                    continue
+                if done:
                     continue
 
                 file_name = os.path.join(
@@ -684,8 +717,13 @@ class ThermoJob():
                     verified[label] = False
                     continue
 
-                lowest_conf, continuous, atoms = self.verify_rotor(
+                lowest_conf, continuous, atoms, isomorphic = self.verify_rotor(
                     conformer, label, steps, step_size)
+
+                if isomorphic is False:
+                    complete[(index,label)] = True
+                    verified[label] = False
+                    continue
 
                 if continuous is False and retried[label] is False:
                     logging.info(f"Rotor Scan {label} is not continuous, resubmitting with Jun-CC-PVTZ basis set")
@@ -841,16 +879,19 @@ class ThermoJob():
                 if boolean is False:
                     logging.warning(f"Torsion scan failed for {label}")
                     logging.info(f"We will use RRHO for {label}")
+                    self.torsion_conformer.torsions.remove(torsion_label_dict[label])
                     file_path = os.path.join(
                                 self.directory, "species", self.method_name, conformer.smiles, "rotors")
                     failure_dir = os.path.join(file_path, "failures")
                     if not os.path.exists(failure_dir):
                         os.makedirs(failure_dir)
-                    move(
-                        os.path.join(file_path, label + ".log"),
-                        os.path.join(file_path, "failures",
-                                     label + ".log")
-                    )
+                    if os.path.exists(os.path.join(file_path, label + ".log")):
+                        move(
+                            os.path.join(file_path, label + ".log"),
+                            os.path.join(file_path, "failures",
+                                        label + ".log")
+                        )
+            logging.info(f"hindered rotor torsions are {self.torsion_conformer.torsions}")
 
             return verified
 
@@ -872,13 +913,18 @@ class ThermoJob():
         continuous = self.check_rotor_continuous(
             steps, step_size, parser=parser)
 
-        self.check_rotor_isomorphic(parser)
+        isomorphic = self.check_rotor_isomorphic(parser)
 
         if self.determine_rotor_symmetry(parser) is False:
             continuous = False
 
+        if self.check_fourier_fit(parser) is False:
+            continuous = False
+
         if continuous is True:
             logging.info("Rotor scan {} is continuous".format(label))
+        else:
+            logging.info("Rotor scan {} is not continuous".format(label))
 
         #try:
         lowest_conf,atoms = self.check_rotor_lowest_conf(parser=parser)
@@ -890,7 +936,45 @@ class ThermoJob():
         #good_slope = self.check_rotor_slope(steps, step_size, parser=parser)
 
         # , good_slope, opt_count_check] ### Previously used, but the second two checks were deemed unecessary
-        return (lowest_conf, continuous, atoms)
+        return (lowest_conf, continuous, atoms, isomorphic)
+
+    def check_fourier_fit(self,parser,plot=False):
+
+        energies = [parser.scfenergies[i] for i,status in enumerate(parser.optstatus) if
+                            status in (2,4,5)]
+        energies -= np.min(energies)
+        energies *= 23.0605419453 # kcal/mol
+
+        angles = np.linspace(0,2*np.pi,len(energies))
+        rotor = HinderedRotor()
+        rotor.fit_fourier_potential_to_data(angles,energies)
+        energies_fourier = np.zeros_like(angles)
+        for i in range(angles.shape[0]):
+            energies_fourier[i] = rotor.get_potential(angles[i])
+        rms_fourier = np.sqrt(np.sum((energies_fourier - energies) * (energies_fourier - energies)) /
+                                                (len(energies) - 1))
+        low_energy = min(energies_fourier)
+        logging.info("RMS is {} kcal/mol".format(round(rms_fourier,3)))
+        logging.info("Min rotor fourier energy is {} kcal/mol".format(round(low_energy,3)))
+
+        if plot is True:
+            data = np.stack([energies,energies_fourier]).T
+            columns = ['energy','fourier-fit']
+            df = pd.DataFrame(data,index=angles.T,columns=columns)
+            fig = df.plot()
+            fig.set_ylabel("kcal/mol")
+            fig.set_title(path)
+            fig.set_xlabel(round(rms_fourier,3))
+
+        if rms_fourier > 0.5:
+            logging.warning(f"Rotor scan failed because fourier rms of {rms_fourier} > 0.5 kcal/mol")
+            return False
+
+        if low_energy < -2.0:
+            logging.warning(f"Rotor scan failed because min energy of Fourier fit of {low_energy} < -2.0 kcal/mol")
+            return False
+
+        return True
 
     def check_rotor_opts(self, steps, parser):
 
@@ -1024,8 +1108,8 @@ class ThermoJob():
                 )
             if not starting_molecule.is_isomorphic(test_molecule):
                 logging.info(
-                    "Output geometry of {} is not isomorphic with input geometry".format(log_path))
-                assert False
+                    "Min geometry of rotor is not isomorphic with output geometry")
+                return (False, False)
             return (False, atoms)
 
         return (True, None)
@@ -1034,10 +1118,13 @@ class ThermoJob():
 
         starting_molecule = RMGMolecule(smiles=self.rmg_mol.smiles)
         starting_molecule = starting_molecule.to_single_bonds()
+        isomorphic = True
         for i in range(len(parser.converged_geometries)):
             mol = RMGMolecule()
             mol.from_xyz(parser.atomnos,parser.converged_geometries[i])
-            assert mol.is_isomorphic(starting_molecule), f"Rotor scan broke molecule at step {i}"
+            if not mol.is_isomorphic(starting_molecule):
+                logging.warning(f"Rotor scan broke molecule at step {i}")
+                return False
 
     def determine_rotor_symmetry(self,parser):
         """
