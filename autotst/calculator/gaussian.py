@@ -391,8 +391,9 @@ class Gaussian():
 
     def get_rotor_calc(self,
                        torsion_index=0,
-                       steps=36,
-                       step_size=10.0,
+                       steps=24,
+                       step_size=15.0,
+                       convergence=None,
                        freeze=False):
         """
         A method to create all of the calculators needed to perform hindered rotor calculations given a `Conformer` and a `Torsion`.
@@ -415,7 +416,13 @@ class Gaussian():
         #     self.settings["basis"] = 'jun-cc-pvtz'
         #     self.settings["dispersion"] = None
 
-        convergence = self.settings["convergence"].upper()
+        if convergence is None:
+            convergence = self.settings["convergence"].upper()
+
+        if self.settings["dispersion"]:
+            dispersion = 'EmpiricalDispersion={}'.format(self.settings["dispersion"].upper())
+        else: 
+            dispersion = ''
 
         self.settings["mem"] = '30GB'
         parition = 'short'
@@ -472,7 +479,7 @@ class Gaussian():
             label = conformer_dir = self.conformer.smiles
             label += "_{}by{}_{}_{}".format(steps, int(step_size), j, k)
             conformer_type = "species"
-            extra = "Opt=(CalcFC,ModRedun,{})".format(convergence)
+            extra = "{} Opt=(CalcFC,ModRedun,{})".format(dispersion,convergence)
 
         if freeze is True:
             for locked_torsion in self.conformer.torsions:  # TODO: maybe doesn't work;
@@ -510,7 +517,7 @@ class Gaussian():
         del ase_gaussian.parameters['force']
         return ase_gaussian
 
-    def get_conformer_calc(self, opt=True, freq=True):
+    def get_conformer_calc(self, opt=True, freq=False):
         """
         A method that creates a calculator for a `Conformer` that will perform a geometry optimization
 
@@ -572,12 +579,14 @@ class Gaussian():
         label = "{}_{}_{}".format(self.conformer.smiles, self.conformer.index, self.opt_method)
         #label = "{}_{}".format(self.conformer.smiles, self.conformer.index)
 
-        if all([opt, freq]):
-            label += '_optfreq'
-        elif opt is True:
-            label += '_opt'
-        elif freq is True:
-            label += '_freq'
+        # if all([opt, freq]):
+        #     label += '_optfreq'
+        # elif opt is True:
+        #     label += '_opt'
+        # elif freq is True:
+        #     label += '_freq'
+
+        label += '_optfreq'
         
         new_scratch = os.path.join(
             self.directory,
@@ -631,21 +640,26 @@ class Gaussian():
         - calc (ASEGaussian): an ASEGaussian calculator with all of the proper setting specified
         """
 
-        method = self.settings["method"].upper()
-        basis = self.settings["basis"].upper()
-        if self.settings["dispersion"]:
-            dispersion = 'EmpiricalDispersion={}'.format(self.settings["dispersion"].upper())
-        else: 
+        if self.settings["sp"] == 'G4' or self.settings["sp"] == 'orca':
+            method = "B3LYP"
+            basis = "6-31G(2df,p)"
             dispersion = ''
+        else:
+            method = self.settings["method"].upper()
+            basis = self.settings["basis"].upper()
+            if self.settings["dispersion"]:
+                dispersion = 'EmpiricalDispersion={}'.format(self.settings["dispersion"].upper())
+            else: 
+                dispersion = ''
 
-        self.settings["mem"] = '10GB'
+        self.settings["mem"] = '20GB'
         self.settings["time"] = '1:00:00'
         num_atoms = self.conformer.rmg_molecule.get_num_atoms()
         
         if num_atoms <= 4:
             self.settings["nprocshared"] = 4
         elif num_atoms <= 8:
-            self.settings["mem"] = '20GB'
+            self.settings["mem"] = '30GB'
             self.settings["nprocshared"] = 6
         elif num_atoms <= 15:
             self.settings["mem"] = '40GB'
@@ -758,7 +772,8 @@ class Gaussian():
     def get_sp_calc(self):
 
         method = self.settings["sp"].upper()
-        convergence = self.settings["convergence"].upper()
+        #convergence = self.settings["convergence"].upper()
+        convergence = '' 
 
         gaussian_methods = [
             "G1","G2","G3","G4","G2MP2","G3MP2","G3B3","G3MP2B3","G4","G4MP2",
@@ -771,16 +786,16 @@ class Gaussian():
         self.settings["partition"] = 'short'
         num_atoms = self.conformer.rmg_molecule.get_num_atoms() - self.conformer.rmg_molecule.get_num_atoms('H')
         
-        if num_atoms <= 6:
-            self.settings["mem"] = '120GB'
+        if num_atoms <= 4:
+            self.settings["mem"] = '160GB'
             self.settings["nprocshared"] = 56
             self.settings["partition"] = 'express'
             self.settings["time"] = "1:00:00"
-        elif num_atoms <= 8:
-            self.settings["mem"] = '180GB'
-            self.settings["nprocshared"] = 56
-            self.settings["partition"] = 'express'
-            self.settings["time"] = "1:00:00"
+        # elif num_atoms <= 8:
+        #     self.settings["mem"] = '180GB'
+        #     self.settings["nprocshared"] = 56
+        #     self.settings["partition"] = 'express'
+        #     self.settings["time"] = "1:00:00"
         elif num_atoms <= 10:
             self.settings["mem"] = '250GB'
             self.settings["nprocshared"] = 28

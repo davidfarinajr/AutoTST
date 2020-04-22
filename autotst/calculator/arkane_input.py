@@ -85,7 +85,7 @@ class Arkane_Input():
    
         tor_log = os.path.join(
             self.rotors_dir,
-            self.conformer.smiles + '_36by10_{0}_{1}.log'.format(j, k)
+            self.conformer.smiles + '_24by15_{0}_{1}.log'.format(j, k)
         )
 
         if not os.path.exists(tor_log):
@@ -93,7 +93,7 @@ class Arkane_Input():
                 "Torsion log file does not exist for {}".format(torsion))
             return ""
 
-        tor_log = os.path.join(os.path.basename(self.rotors_dir), self.conformer.smiles + '_36by10_{0}_{1}.log'.format(j, k))
+        tor_log = os.path.join(os.path.basename(self.rotors_dir), self.conformer.smiles + '_24by15_{0}_{1}.log'.format(j, k))
         top_IDs = []
         for num, tf in enumerate(torsion.mask):
             if tf:
