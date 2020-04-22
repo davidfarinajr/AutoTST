@@ -53,7 +53,7 @@ from autotst.conformer.utilities import get_energy, find_terminal_torsions
 from rmgpy.exceptions import AtomTypeError
 from rmgpy.molecule import Molecule
 
-from copy import copy
+from copy import deepcopy
 
 def find_all_combos(
         conformer,
@@ -313,7 +313,7 @@ def systematic_search(conformer,
             copy_conf.set_chirality(center.index, s_r)
 
         copy_conf.update_coords_from("ase")
-        copy_conf.ase_molecule.set_calculator(copy(calc))
+        copy_conf.ase_molecule.set_calculator(deepcopy(calc))
   
         conformers[index] = copy_conf
 
@@ -376,8 +376,7 @@ def systematic_search(conformer,
             logging.info("{} > {}, reducing energy cutoff to reduce conformer count".format(len(df), max_conformers))
             df = df.iloc[:max_conformers]
             energies = df.energy.values
-            energy_span = (energies.max() - energies.min()) / \
-                units.kcal * units.mol * units.eV  # kcal/mol
+            energy_span = (energies.max() - energies.min()) * units.kcal / units.mol / units.eV  # kcal/mol
             logging.info("Energy cutoff reduced from {} to {} kcal/mol to reduce conformer count to {} conformers".format(
                 energy_cutoff, energy_span, len(df)))
 
