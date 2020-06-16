@@ -711,7 +711,7 @@ class ThermoJob():
                     ase_calculator.parameters["partition"] = "short"
                     ase_calculator.parameters["time"] = "24:00:00"
                     ase_calculator.parameters["nprocshared"] = 56
-                    ase_calculator.parameters["mem"] = '50GB'
+                    ase_calculator.parameters["mem"] = '100GB'
                     logging.info(f"resubmitting {label}")
                     self._submit_conformer(conformer, ase_calculator, restart=True)
                     recalc[label] = True
@@ -731,7 +731,13 @@ class ThermoJob():
                     verified[label] = False
                     continue
 
-                if continuous is False and retried[label] is False:
+                if not lowest_conf:
+                    conformer_error = True
+                    done = True
+                    break
+                    continue
+
+                if continuous is False and retried[label] is False and len(conformer.torsions) > 1:
                     logging.info(f"Rotor Scan {label} is not continuous, resubmitting with frozen torsions")
                     ase_calculator = self.calculator.get_rotor_calc(index, steps, step_size,convergence='',freeze=True)
                     ase_calculator.parameters["partition"] = "short"
@@ -746,13 +752,6 @@ class ThermoJob():
                 else:
                     verified[label] = False
 
-
-                if not lowest_conf:
-                    conformer_error = True
-                    done = True
-                    break
-                    continue
-
                 complete[(index,label)] = True
 
                 if all(complete.values()):
@@ -761,6 +760,9 @@ class ThermoJob():
         if conformer_error:
             logging.info(
                 "A lower energy conformer was found... Going to optimize this instead")
+            sp_dir = os.path.join(self.calculator.directory,"species",self.method_name,self.smiles,'sp')
+            if os.path.exists(sp_dir):
+                rmtree(sp_dir)
             # assert False
             label =  "{}_{}_optfreq".format(self.smiles,self.method_name)
             log_path = os.path.join(
@@ -1851,6 +1853,7 @@ class ThermoJob():
                 #     time.sleep(10)
                 time.sleep(5)
                 os.remove(os.path.join(arkane_dir,label + ".log"))
+                os.remove(os.path.join(arkane_dir,freq_label+'.log'))
                 if os.path.exists(os.path.join(arkane_dir,'rotors')):
                     rmtree(os.path.join(arkane_dir,'rotors'))
                 arkane_out = os.path.join(arkane_dir,'output.py')
